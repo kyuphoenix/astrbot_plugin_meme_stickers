@@ -1,0 +1,6 @@
+skia-python
+pydantic>=2
+httpx
+tenacity
+yarl
+typing_extensions
