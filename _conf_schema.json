@@ -1,0 +1,38 @@
+{
+  "proxy": {
+    "description": "请求代理",
+    "type": "string",
+    "default": ""
+  },
+  "github_url_template": {
+    "description": "GitHub Raw 模板",
+    "type": "string",
+    "default": "https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}"
+  },
+  "hub_manifest_url": {
+    "description": "Hub 清单 URL",
+    "type": "string",
+    "default": "https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json"
+  },
+  "retry_times": {
+    "description": "请求重试次数",
+    "type": "int",
+    "default": 3
+  },
+  "req_concurrency": {
+    "description": "并发请求数",
+    "type": "int",
+    "default": 8
+  },
+  "req_timeout": {
+    "description": "请求超时(秒)",
+    "type": "int",
+    "default": 5
+  },
+  "default_sticker_image_format": {
+    "description": "默认图片格式",
+    "type": "string",
+    "default": "png",
+    "options": ["png", "jpeg", "webp"]
+  }
+}
