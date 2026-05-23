@@ -1,28 +1,57 @@
 # astrbot_plugin_meme_stickers
 
-Meme Stickers 的 AstrBot 重构版插件。
+本插件由 [lgc-NB2Dev/nonebot-plugin-meme-stickers](https://github.com/lgc-NB2Dev/nonebot-plugin-meme-stickers) 迁移而来，面向 AstrBot 运行环境重构。
 
-## 功能
+## 插件信息
 
-- 贴纸包列表：`/meme-stickers list`
-- 在线列表：`/meme-stickers list online`
-- 显示全部（含不可用）：`/meme-stickers list all`
-- 生成贴纸：`/meme-stickers generate`
-- 管理命令：`install / reload / update / delete / enable / disable`
-- 支持交互式选择（贴纸包/分类/贴纸/文本）
-- 支持高级参数（位置、旋转、颜色、字体样式、输出格式等）
+- 插件名：`astrbot_plugin_meme_stickers`
+- AstrBot 显示名：`Arc/pjsk表情包制作`
+- 主要能力：
+  - 贴纸包列表（本地/在线）
+  - 在线安装与更新贴纸包
+  - 交互式制作贴纸（包 -> 分类 -> 贴纸 -> 文本）
+  - 快捷指令直达制作流程（`pjsk` / `arc`）
 
-## 安装说明
+## 使用方法
 
-1. 将 `astrbot_plugin_meme_stickers` 文件夹整体打包为 zip。
-2. 上传到 AstrBot 插件管理页面安装。
-3. 确保 zip 顶层是插件文件夹本身，不要把 `main.py` 直接放在压缩包根目录。
+### 基础指令
 
-## 字体
+- `/meme-stickers help`
+- `/meme-stickers list`
+- `/meme-stickers list all`
+- `/meme-stickers list online`
+- `/meme-stickers install <slug...>`
+- `/meme-stickers update`
+- `/meme-stickers reload`
+- `/meme-stickers generate`
 
-插件优先使用自身目录下 `fonts/` 中的字体文件（`.ttf/.otf/.ttc`）。
+### 快捷制作指令
 
-## 说明
+- `pjsk`：直接进入 `pjsk` 贴纸包交互式制作
+- `arc` 或 `arcaea`：直接进入 `arcaea` 贴纸包交互式制作
 
-- 本插件已移除对外部 `nonebot` / `cookit` 包的运行时依赖。
-- 如遇异常，请先检查上传包编码是否为 UTF-8 无 BOM。
+### 交互说明
+
+- 输入 `r` / `b` / `back` / `return`：返回上一步
+- 输入 `0` / `q` / `quit` / `exit` / `cancel`：退出当前交互
+- 会话为静默超时，超时后自动失效（不额外提示）
+
+## 资源与字体
+
+- 贴纸资源目录（AstrBot 数据目录下）：`plugin_data/astrbot_plugin_meme_stickers/packs/`
+- 已安装贴纸包示例：
+  - `packs/pjsk/`
+  - `packs/arcaea/`
+- 共享字体目录：`packs/_shared/`
+
+插件会从上述存储目录读取字体，不依赖插件目录内置字体。
+
+## 安装与打包
+
+1. 将 `astrbot_plugin_meme_stickers` 文件夹打包为 zip。
+2. zip 顶层必须是插件文件夹本身（不能直接把 `main.py` 放在根目录）。
+3. 在 AstrBot 插件管理页面上传安装。
+
+## 依赖
+
+见同目录下 `requirements.txt`。
