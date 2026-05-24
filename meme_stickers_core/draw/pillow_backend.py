@@ -111,29 +111,25 @@ def render_sticker_image(
         w0, h0 = bb[2] - bb[0], bb[3] - bb[1]
         lay = Image.new("RGBA", (max(1, w0 + 8), max(1, h0 + 8)), (0, 0, 0, 0))
         ld = ImageDraw.Draw(lay)
-        # Mixed-text renderer: keep normal chars on pack font, route emoji chars to emoji font.
+        # Draw full text once with primary font to preserve spacing/kerning.
         x0 = 4 - bb[0]
         y0 = 4 - bb[1]
+        ld.text(
+            (x0, y0),
+            text,
+            font=font,
+            fill=_rgba(params.text_color),
+            stroke_fill=_rgba(params.stroke_color),
+            stroke_width=stroke,
+        )
+        # Overlay emoji glyphs at measured positions (without breaking normal text spacing).
         efont = _emoji_font(size)
-        cx = x0
+        prefix = ""
         for ch in text:
-            use_emoji = _is_emoji_char(ch)
-            f = efont if use_emoji else font
-            if use_emoji:
-                ld.text((cx, y0), ch, font=f, embedded_color=True)
-                cb = ld.textbbox((cx, y0), ch, font=f, embedded_color=True)
-            else:
-                ld.text(
-                    (cx, y0),
-                    ch,
-                    font=f,
-                    fill=_rgba(params.text_color),
-                    stroke_fill=_rgba(params.stroke_color),
-                    stroke_width=stroke,
-                )
-                cb = ld.textbbox((cx, y0), ch, font=f, stroke_width=stroke)
-            cw = max(1, cb[2] - cb[0])
-            cx += cw
+            if _is_emoji_char(ch):
+                px = x0 + ld.textlength(prefix, font=font)
+                ld.text((px, y0), ch, font=efont, embedded_color=True)
+            prefix += ch
         _fill_text_holes(lay, _rgba(params.text_color))
         return lay, w0, h0
 
