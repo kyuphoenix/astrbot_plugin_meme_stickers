@@ -70,35 +70,41 @@ def render_sticker_image(
     if not text:
         return canvas
 
-    font_size = float(params.font_size)
-    font = _pick_font(params.font_families, font_size)
     draw = ImageDraw.Draw(canvas)
+    font_size = float(params.font_size)
 
-    stroke_w = max(0, int(round(font_size * float(params.stroke_width_factor))))
+    def make_layer(size: float):
+        font = _pick_font(params.font_families, size)
+        stroke = max(0, int(round(size * float(params.stroke_width_factor))))
+        bb = draw.textbbox((0, 0), text, font=font, stroke_width=stroke)
+        w0, h0 = bb[2] - bb[0], bb[3] - bb[1]
+        lay = Image.new("RGBA", (max(1, w0 + 8), max(1, h0 + 8)), (0, 0, 0, 0))
+        ld = ImageDraw.Draw(lay)
+        ld.text(
+            (4 - bb[0], 4 - bb[1]),
+            text,
+            font=font,
+            fill=_rgba(params.text_color),
+            stroke_fill=_rgba(params.stroke_color),
+            stroke_width=stroke,
+        )
+        _fill_text_holes_white(lay)
+        return lay, w0, h0
 
-    bbox = draw.textbbox((0, 0), text, font=font, stroke_width=stroke_w)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    layer, tw, th = make_layer(font_size)
 
-    if auto_resize and (tw > params.width or th > params.height):
-        ratio = min(params.width / max(1, tw), params.height / max(1, th))
-        font_size = max(1.0, font_size * ratio)
-        font = _pick_font(params.font_families, font_size)
-        stroke_w = max(0, int(round(font_size * float(params.stroke_width_factor))))
-        bbox = draw.textbbox((0, 0), text, font=font, stroke_width=stroke_w)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    def rotated_size(img: Image.Image) -> tuple[int, int]:
+        if abs(float(params.text_rotate_degrees)) <= 1e-6:
+            return img.width, img.height
+        tmp = img.rotate(-float(params.text_rotate_degrees), expand=True, resample=Image.Resampling.BICUBIC)
+        return tmp.width, tmp.height
 
-    layer = Image.new("RGBA", (max(1, tw + 8), max(1, th + 8)), (0, 0, 0, 0))
-    ldraw = ImageDraw.Draw(layer)
-    ldraw.text(
-        (4 - bbox[0], 4 - bbox[1]),
-        text,
-        font=font,
-        fill=_rgba(params.text_color),
-        stroke_fill=_rgba(params.stroke_color),
-        stroke_width=stroke_w,
-    )
-    _fill_text_holes_white(layer)
-
+    if auto_resize:
+        rw, rh = rotated_size(layer)
+        if rw > params.width or rh > params.height:
+            ratio = min(params.width / max(1, rw), params.height / max(1, rh))
+            font_size = max(1.0, font_size * ratio)
+            layer, tw, th = make_layer(font_size)
     if abs(float(params.text_rotate_degrees)) > 1e-6:
         # Match legacy skia visual direction: positive degree should slope upward to the right.
         layer = layer.rotate(-float(params.text_rotate_degrees), expand=True, resample=Image.Resampling.BICUBIC)

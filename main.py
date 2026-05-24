@@ -150,6 +150,10 @@ class MemeStickersPlugin(Star):
         return opts, text_parts
 
     @staticmethod
+    def _preview_label(idx: int, name: str, max_chars: int = 10) -> str:
+        return f"{idx}. {name.strip()}"
+
+    @staticmethod
     def _parse_color_to_argb_int(v: str) -> int:
         r, g, b, a = resolve_color_to_tuple(v)
         return ((a & 0xFF) << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF)
@@ -184,7 +188,9 @@ class MemeStickersPlugin(Star):
         self.sessions[self._sid(event)] = self._new_session(mode="generate", step="pick_category", pack_slug=pack.slug)
         categories = sorted(pack.manifest.resolved_stickers_by_category.keys())
         sample = [
-            pack.manifest.resolved_stickers_by_category[c][0].params.model_copy(update={"text": f"{i}. {c}"})
+            pack.manifest.resolved_stickers_by_category[c][0].params.model_copy(
+                update={"text": self._preview_label(i, c)}
+            )
             for i, c in enumerate(categories, 1)
         ]
         for s in sample:
@@ -414,7 +420,9 @@ class MemeStickersPlugin(Star):
             st.step = "pick_category"
             categories = sorted(pack.manifest.resolved_stickers_by_category.keys())
             sample = [
-                pack.manifest.resolved_stickers_by_category[c][0].params.model_copy(update={"text": f"{i}. {c}"})
+                pack.manifest.resolved_stickers_by_category[c][0].params.model_copy(
+                    update={"text": self._preview_label(i, c)}
+                )
                 for i, c in enumerate(categories, 1)
             ]
             for s in sample:
@@ -455,7 +463,10 @@ class MemeStickersPlugin(Star):
                 return
 
             st.step = "pick_sticker"
-            preview = [x.params.model_copy(update={"text": f"{i}. {x.name}"}) for i, x in enumerate(stickers, 1)]
+            preview = [
+                x.params.model_copy(update={"text": self._preview_label(i, x.name)})
+                for i, x in enumerate(stickers, 1)
+            ]
             gp = pack.manifest.sticker_grid.resolved_stickers_params.get(c, pack.manifest.sticker_grid.default_params)
             for s in preview:
                 s.font_families = [*self.bundled_fonts, *s.font_families]
