@@ -137,7 +137,7 @@ def render_sticker_image(
             grown = mask.filter(ImageFilter.MaxFilter(size=max(3, k)))
             band = ImageChops.subtract(grown, mask)
             stroke_img = Image.new("RGBA", lay.size, _rgba(params.stroke_color))
-            lay.alpha_composite(stroke_img, (0, 0), band)
+            lay.paste(stroke_img, (0, 0), band)
         ld.text(
             (x0, y0),
             text,
