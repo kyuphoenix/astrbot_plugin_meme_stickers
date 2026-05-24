@@ -5,12 +5,18 @@ import math
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
-from collections import deque
 
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 from ..consts import RGBAColorTuple, SkiaEncodedImageFormatType
 from ..sticker_pack.models import StickerParams, StickerGridParams
+
+EMOJI_FONT_CANDIDATES: list[str] = []
+
+
+def set_emoji_font_candidates(paths: list[str]) -> None:
+    global EMOJI_FONT_CANDIDATES
+    EMOJI_FONT_CANDIDATES = [x for x in paths if x]
 
 
 def _rgba(c: RGBAColorTuple) -> tuple[int, int, int, int]:
@@ -77,6 +83,11 @@ def _is_emoji_char(ch: str) -> bool:
 
 def _emoji_font(size: float) -> ImageFont.ImageFont:
     s = max(1, int(round(size)))
+    for p in EMOJI_FONT_CANDIDATES:
+        try:
+            return _font(p, s)
+        except Exception:
+            continue
     for name in ("Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twitter Color Emoji"):
         try:
             return _font(name, s)
@@ -111,16 +122,24 @@ def render_sticker_image(
         w0, h0 = bb[2] - bb[0], bb[3] - bb[1]
         lay = Image.new("RGBA", (max(1, w0 + 8), max(1, h0 + 8)), (0, 0, 0, 0))
         ld = ImageDraw.Draw(lay)
-        # Draw full text once with primary font to preserve spacing/kerning.
+        # Keep text alignment stable while ensuring glyph holes are rendered naturally.
+        # Strategy: draw stroke-only layer first, then fill-only layer.
         x0 = 4 - bb[0]
         y0 = 4 - bb[1]
+        if stroke > 0:
+            ld.text(
+                (x0, y0),
+                text,
+                font=font,
+                fill=(0, 0, 0, 0),
+                stroke_fill=_rgba(params.stroke_color),
+                stroke_width=stroke,
+            )
         ld.text(
             (x0, y0),
             text,
             font=font,
             fill=_rgba(params.text_color),
-            stroke_fill=_rgba(params.stroke_color),
-            stroke_width=stroke,
         )
         # Overlay emoji glyphs at measured positions (without breaking normal text spacing).
         efont = _emoji_font(size)
@@ -130,7 +149,6 @@ def render_sticker_image(
                 px = x0 + ld.textlength(prefix, font=font)
                 ld.text((px, y0), ch, font=efont, embedded_color=True)
             prefix += ch
-        _fill_text_holes(lay, _rgba(params.text_color))
         return lay, w0, h0
 
     layer, tw, th = make_layer(font_size)
@@ -160,42 +178,6 @@ def render_sticker_image(
     return canvas
 
 
-def _fill_text_holes(layer: Image.Image, fill_rgba: tuple[int, int, int, int]) -> None:
-    """
-    Fill enclosed transparent holes inside rendered glyphs with foreground color.
-    """
-    alpha = layer.getchannel("A")
-    w, h = alpha.size
-    a = alpha.load()
-    visited = [[False] * w for _ in range(h)]
-    q: deque[tuple[int, int]] = deque()
-
-    # Flood-fill from borders through transparent area: mark outside transparent region.
-    def push_if_transparent(x: int, y: int):
-        if 0 <= x < w and 0 <= y < h and (not visited[y][x]) and a[x, y] == 0:
-            visited[y][x] = True
-            q.append((x, y))
-
-    for x in range(w):
-        push_if_transparent(x, 0)
-        push_if_transparent(x, h - 1)
-    for y in range(h):
-        push_if_transparent(0, y)
-        push_if_transparent(w - 1, y)
-
-    while q:
-        x, y = q.popleft()
-        push_if_transparent(x + 1, y)
-        push_if_transparent(x - 1, y)
-        push_if_transparent(x, y + 1)
-        push_if_transparent(x, y - 1)
-
-    # Transparent pixels not reachable from border are enclosed holes.
-    px = layer.load()
-    for y in range(h):
-        for x in range(w):
-            if a[x, y] == 0 and not visited[y][x]:
-                px[x, y] = fill_rgba
 
 
 def encode_image(img: Image.Image, image_format: SkiaEncodedImageFormatType, quality: int = 95, background: int | None = None) -> bytes:

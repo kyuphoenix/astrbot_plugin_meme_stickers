@@ -2,8 +2,10 @@ from dataclasses import dataclass
 from pathlib import Path
 import tempfile
 import asyncio
+import httpx
 
 import astrbot.api.message_components as Comp
+from astrbot.api import logger
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.all import AstrBotConfig
 from astrbot.api.star import Context, Star, StarTools
@@ -19,6 +21,7 @@ from .meme_stickers_core.draw.pillow_backend import (
     render_sticker_grid_bytes,
     render_sticker_grid_with_params_bytes,
     render_pack_list_bytes,
+    set_emoji_font_candidates,
 )
 
 HELP = """meme-stickers usage:
@@ -49,6 +52,8 @@ class SessionState:
 
 class MemeStickersPlugin(Star):
     SESSION_TIMEOUT_SECONDS = 180
+    EMOJI_FONT_URL = "https://raw.githubusercontent.com/googlefonts/noto-emoji/main/fonts/NotoColorEmoji.ttf"
+    EMOJI_FONT_FILENAME = "NotoColorEmoji.ttf"
 
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -66,7 +71,9 @@ class MemeStickersPlugin(Star):
 
     async def initialize(self):
         self.pack_manager.reload(clear_updating_flags=True)
+        await self._ensure_emoji_font()
         self._reload_bundled_fonts()
+        self._bind_emoji_font_candidates()
 
     def _reload_bundled_fonts(self):
         font_exts = {".ttf", ".otf", ".ttc"}
@@ -86,6 +93,29 @@ class MemeStickersPlugin(Star):
                     found.append(str(p))
 
         self.bundled_fonts = list(dict.fromkeys(found))
+
+    def _bind_emoji_font_candidates(self):
+        candidates: list[str] = []
+        p = self.shared_fonts_dir / self.EMOJI_FONT_FILENAME
+        if p.exists():
+            candidates.append(str(p))
+        set_emoji_font_candidates(candidates)
+
+    async def _ensure_emoji_font(self):
+        self.shared_fonts_dir.mkdir(parents=True, exist_ok=True)
+        p = self.shared_fonts_dir / self.EMOJI_FONT_FILENAME
+        if p.exists() and p.stat().st_size > 1024:
+            return
+        try:
+            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as cli:
+                r = await cli.get(self.EMOJI_FONT_URL)
+                r.raise_for_status()
+                data = r.content
+            if len(data) > 1024:
+                p.write_bytes(data)
+                logger.info(f"[meme_stickers] downloaded emoji font: {p}")
+        except Exception as e:
+            logger.warning(f"[meme_stickers] failed to download emoji font: {type(e).__name__}: {e}")
 
     def _sid(self, event: AstrMessageEvent) -> str:
         return f"{event.get_group_id()}:{event.get_sender_id()}"
@@ -242,13 +272,17 @@ class MemeStickersPlugin(Star):
 
         if sub == "reload":
             op = self.pack_manager.reload(clear_updating_flags=True)
+            await self._ensure_emoji_font()
             self._reload_bundled_fonts()
+            self._bind_emoji_font_candidates()
             yield event.plain_result(f"已重载，成功 {len(op.succeed)}，失败 {len(op.failed)}")
             return
 
         if sub == "update":
             op, _ = await self.pack_manager.update_all(force=False)
+            await self._ensure_emoji_font()
             self._reload_bundled_fonts()
+            self._bind_emoji_font_candidates()
             yield event.plain_result(f"更新完成：成功 {len(op.succeed)}，跳过 {len(op.skipped)}，失败 {len(op.failed)}")
             return
 
@@ -260,7 +294,9 @@ class MemeStickersPlugin(Star):
                 yield event.plain_result("未找到可安装的贴纸包")
                 return
             op, _ = await self.pack_manager.install(infos)
+            await self._ensure_emoji_font()
             self._reload_bundled_fonts()
+            self._bind_emoji_font_candidates()
             yield event.plain_result(f"安装完成：成功 {len(op.succeed)}，失败 {len(op.failed)}")
             return
 
