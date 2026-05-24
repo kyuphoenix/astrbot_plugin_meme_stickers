@@ -98,7 +98,8 @@ def render_sticker_image(
     )
 
     if abs(float(params.text_rotate_degrees)) > 1e-6:
-        layer = layer.rotate(float(params.text_rotate_degrees), expand=True, resample=Image.Resampling.BICUBIC)
+        # Match legacy skia visual direction: positive degree should slope upward to the right.
+        layer = layer.rotate(-float(params.text_rotate_degrees), expand=True, resample=Image.Resampling.BICUBIC)
 
     tx = int(round(float(params.text_x) - layer.width / 2))
     ty = int(round(float(params.text_y) - layer.height / 2))
