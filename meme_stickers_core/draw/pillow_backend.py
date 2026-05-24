@@ -96,10 +96,21 @@ def render_sticker_image(
     draw = ImageDraw.Draw(canvas)
     font_size = float(params.font_size)
 
+    def _render_one_emoji(ch: str, size: float) -> Image.Image:
+        side = max(24, int(round(size * 1.8)))
+        em = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+        try:
+            with Pilmoji(em) as pm:
+                pm.text((0, 0), ch, fill=(255, 255, 255, 255), emoji_scale_factor=EMOJI_SCALE)
+        except Exception:
+            return em
+        return em
+
     def make_layer(size: float):
         font = _pick_font(params.font_families, size)
         stroke = max(0, int(round(size * float(params.stroke_width_factor))))
-        bb = draw.textbbox((0, 0), text, font=font, stroke_width=stroke)
+        text_no_emoji = "".join(" " if _is_emoji_char(ch) else ch for ch in text)
+        bb = draw.textbbox((0, 0), text_no_emoji, font=font, stroke_width=stroke)
         w0, h0 = bb[2] - bb[0], bb[3] - bb[1]
         lay = Image.new("RGBA", (max(1, w0 + 8), max(1, h0 + 8)), (0, 0, 0, 0))
         ld = ImageDraw.Draw(lay)
@@ -111,7 +122,7 @@ def render_sticker_image(
         if stroke > 0:
             mask = Image.new("L", lay.size, 0)
             md = ImageDraw.Draw(mask)
-            md.text((x0, y0), text, font=font, fill=255)
+            md.text((x0, y0), text_no_emoji, font=font, fill=255)
             # MaxFilter grows white region; subtract original mask to get contour band,
             # which naturally includes inner-hole boundaries.
             k = stroke * 2 + 1
@@ -121,23 +132,31 @@ def render_sticker_image(
             lay.paste(stroke_img, (0, 0), band)
         ld.text(
             (x0, y0),
-            text,
+            text_no_emoji,
             font=font,
             fill=_rgba(params.text_color),
         )
-        # Overlay color emoji via pilmoji. Keep normal text rendering for consistent kerning/stroke.
-        if any(_is_emoji_char(ch) for ch in text):
-            try:
-                with Pilmoji(lay) as pm:
-                    pm.text(
-                        (x0, y0),
-                        text,
-                        font=font,
-                        fill=_rgba(params.text_color),
-                        emoji_scale_factor=EMOJI_SCALE,
-                    )
-            except Exception:
-                pass
+        # Overlay color emoji one-by-one at measured glyph positions.
+        prefix = ""
+        emoji_stroke = max(1, int(round(stroke * 0.6))) if stroke > 0 else 0
+        for ch in text:
+            if _is_emoji_char(ch):
+                px = int(round(x0 + ld.textlength(prefix, font=font)))
+                em = _render_one_emoji(ch, size)
+                alpha = em.split()[-1]
+                if alpha.getbbox():
+                    # Trim transparent border for tighter placement.
+                    box = alpha.getbbox()
+                    em = em.crop(box)
+                    alpha = alpha.crop(box)
+                    if emoji_stroke > 0:
+                        k = emoji_stroke * 2 + 1
+                        grown = alpha.filter(ImageFilter.MaxFilter(size=max(3, k)))
+                        band = ImageChops.subtract(grown, alpha)
+                        stroke_img = Image.new("RGBA", em.size, _rgba(params.stroke_color))
+                        lay.paste(stroke_img, (px, int(round(y0))), band)
+                    lay.paste(em, (px, int(round(y0))), alpha)
+            prefix += ch
         return lay, w0, h0
 
     layer, tw, th = make_layer(font_size)
