@@ -4,3 +4,5 @@ tenacity
 yarl
 typing_extensions
 Pillow
+pilmoji
+emoji

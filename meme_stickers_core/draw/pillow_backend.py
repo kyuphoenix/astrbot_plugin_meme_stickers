@@ -7,16 +7,12 @@ from pathlib import Path
 from typing import Iterable
 
 from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageFilter, ImageFont
+from pilmoji import Pilmoji
 
 from ..consts import RGBAColorTuple, SkiaEncodedImageFormatType
 from ..sticker_pack.models import StickerParams, StickerGridParams
 
-EMOJI_FONT_CANDIDATES: list[str] = []
-
-
-def set_emoji_font_candidates(paths: list[str]) -> None:
-    global EMOJI_FONT_CANDIDATES
-    EMOJI_FONT_CANDIDATES = [x for x in paths if x]
+EMOJI_SCALE = 0.95
 
 
 def _rgba(c: RGBAColorTuple) -> tuple[int, int, int, int]:
@@ -49,16 +45,6 @@ def _font(path_or_name: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.Im
     except Exception:
         return ImageFont.load_default()
 
-@lru_cache(maxsize=512)
-def _try_truetype(path_or_name: str, size: int) -> ImageFont.FreeTypeFont | None:
-    p = Path(path_or_name)
-    try:
-        if p.exists():
-            return ImageFont.truetype(str(p), size=size)
-        return ImageFont.truetype(path_or_name, size=size)
-    except Exception:
-        return None
-
 
 def _pick_font(font_families: Iterable[str], size: float) -> ImageFont.ImageFont:
     s = max(1, int(round(size)))
@@ -89,19 +75,6 @@ def _is_emoji_char(ch: str) -> bool:
         or 0x2600 <= cp <= 0x27BF
         or 0xFE00 <= cp <= 0xFE0F
     )
-
-
-def _emoji_font(size: float) -> ImageFont.ImageFont:
-    s = max(1, int(round(size)))
-    for p in EMOJI_FONT_CANDIDATES:
-        f = _try_truetype(p, s)
-        if f is not None:
-            return f
-    for name in ("Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twitter Color Emoji"):
-        f = _try_truetype(name, s)
-        if f is not None:
-            return f
-    return ImageFont.load_default()
 
 
 def render_sticker_image(
@@ -152,17 +125,19 @@ def render_sticker_image(
             font=font,
             fill=_rgba(params.text_color),
         )
-        # Overlay emoji glyphs at measured positions (without breaking normal text spacing).
-        efont = _emoji_font(size)
-        prefix = ""
-        for ch in text:
-            if _is_emoji_char(ch):
-                px = x0 + ld.textlength(prefix, font=font)
-                try:
-                    ld.text((px, y0), ch, font=efont, embedded_color=True)
-                except TypeError:
-                    ld.text((px, y0), ch, font=efont, fill=_rgba(params.text_color))
-            prefix += ch
+        # Overlay color emoji via pilmoji. Keep normal text rendering for consistent kerning/stroke.
+        if any(_is_emoji_char(ch) for ch in text):
+            try:
+                with Pilmoji(lay) as pm:
+                    pm.text(
+                        (x0, y0),
+                        text,
+                        font=font,
+                        fill=_rgba(params.text_color),
+                        emoji_scale_factor=EMOJI_SCALE,
+                    )
+            except Exception:
+                pass
         return lay, w0, h0
 
     layer, tw, th = make_layer(font_size)

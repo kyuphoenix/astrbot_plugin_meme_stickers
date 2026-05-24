@@ -1,11 +1,11 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 from pathlib import Path
 import tempfile
 import asyncio
-import httpx
+import hashlib
+import shutil
 
 import astrbot.api.message_components as Comp
-from astrbot.api import logger
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.all import AstrBotConfig
 from astrbot.api.star import Context, Star, StarTools
@@ -18,11 +18,10 @@ from .meme_stickers_core.utils.file_source import create_req_sem
 from .meme_stickers_core.draw.pillow_backend import (
     render_sticker_image,
     encode_image,
-    render_sticker_grid_bytes,
     render_sticker_grid_with_params_bytes,
     render_pack_list_bytes,
-    set_emoji_font_candidates,
 )
+
 
 HELP = """meme-stickers usage:
 /meme-stickers help
@@ -34,6 +33,8 @@ HELP = """meme-stickers usage:
 /meme-stickers delete <pack...>
 /meme-stickers enable <pack...>
 /meme-stickers disable <pack...>
+/meme-stickers debug-fonts
+/meme-stickers debug-emoji [text]
 /pjsk
 /arc
 """.strip()
@@ -52,8 +53,6 @@ class SessionState:
 
 class MemeStickersPlugin(Star):
     SESSION_TIMEOUT_SECONDS = 180
-    EMOJI_FONT_URL = "https://raw.githubusercontent.com/googlefonts/noto-emoji/main/fonts/NotoColorEmoji.ttf"
-    EMOJI_FONT_FILENAME = "NotoColorEmoji.ttf"
 
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -71,9 +70,8 @@ class MemeStickersPlugin(Star):
 
     async def initialize(self):
         self.pack_manager.reload(clear_updating_flags=True)
-        await self._ensure_emoji_font()
+        self._normalize_shared_fonts()
         self._reload_bundled_fonts()
-        self._bind_emoji_font_candidates()
 
     def _reload_bundled_fonts(self):
         font_exts = {".ttf", ".otf", ".ttc"}
@@ -94,28 +92,46 @@ class MemeStickersPlugin(Star):
 
         self.bundled_fonts = list(dict.fromkeys(found))
 
-    def _bind_emoji_font_candidates(self):
-        candidates: list[str] = []
-        p = self.shared_fonts_dir / self.EMOJI_FONT_FILENAME
-        if p.exists():
-            candidates.append(str(p))
-        set_emoji_font_candidates(candidates)
+    def _sha256(self, p: Path) -> str:
+        h = hashlib.sha256()
+        with p.open("rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+        return h.hexdigest()
 
-    async def _ensure_emoji_font(self):
+    def _normalize_shared_fonts(self):
         self.shared_fonts_dir.mkdir(parents=True, exist_ok=True)
-        p = self.shared_fonts_dir / self.EMOJI_FONT_FILENAME
-        if p.exists() and p.stat().st_size > 1024:
-            return
-        try:
-            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as cli:
-                r = await cli.get(self.EMOJI_FONT_URL)
-                r.raise_for_status()
-                data = r.content
-            if len(data) > 1024:
-                p.write_bytes(data)
-                logger.info(f"[meme_stickers] downloaded emoji font: {p}")
-        except Exception as e:
-            logger.warning(f"[meme_stickers] failed to download emoji font: {type(e).__name__}: {e}")
+        font_exts = {".ttf", ".otf", ".ttc"}
+        shared_by_name: dict[str, Path] = {
+            p.name.lower(): p
+            for p in self.shared_fonts_dir.iterdir()
+            if p.is_file() and p.suffix.lower() in font_exts
+        }
+        for pack in self.pack_manager.packs:
+            pack_shared = pack.base_path / "_shared"
+            if not pack_shared.exists():
+                continue
+            for p in pack_shared.rglob("*"):
+                if not p.is_file() or p.suffix.lower() not in font_exts:
+                    continue
+                key = p.name.lower()
+                dst = shared_by_name.get(key) or (self.shared_fonts_dir / p.name)
+                if not dst.exists():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(p), str(dst))
+                    shared_by_name[key] = dst
+                    continue
+                try:
+                    if self._sha256(p) == self._sha256(dst):
+                        p.unlink(missing_ok=True)
+                    else:
+                        alt = self.shared_fonts_dir / f"{dst.stem}_pack_{pack.slug}{dst.suffix}"
+                        if not alt.exists():
+                            shutil.move(str(p), str(alt))
+                        else:
+                            p.unlink(missing_ok=True)
+                except Exception:
+                    p.unlink(missing_ok=True)
 
     def _sid(self, event: AstrMessageEvent) -> str:
         return f"{event.get_group_id()}:{event.get_sender_id()}"
@@ -180,7 +196,7 @@ class MemeStickersPlugin(Star):
         return opts, text_parts
 
     @staticmethod
-    def _preview_label(idx: int, name: str, max_chars: int = 10) -> str:
+    def _preview_label(idx: int, name: str) -> str:
         return f"{idx}. {name.strip()}"
 
     @staticmethod
@@ -194,16 +210,7 @@ class MemeStickersPlugin(Star):
             s = p.manifest.resolved_sample_sticker.model_copy(deep=True)
             s.text = f"{i}. {p.manifest.name} [{p.slug}]"
             s.font_families = [*self.bundled_fonts, *s.font_families]
-            items.append(
-                dict(
-                    base_path=p.base_path,
-                    sample_sticker_params=s,
-                    name=p.manifest.name,
-                    slug=p.slug,
-                    description=p.manifest.description,
-                    index=str(i),
-                )
-            )
+            items.append(dict(base_path=p.base_path, sample_sticker_params=s, name=p.manifest.name, slug=p.slug, description=p.manifest.description, index=str(i)))
         return items
 
     async def _start_pack_interactive(self, event: AstrMessageEvent, pack_query: str):
@@ -218,9 +225,7 @@ class MemeStickersPlugin(Star):
         self.sessions[self._sid(event)] = self._new_session(mode="generate", step="pick_category", pack_slug=pack.slug)
         categories = sorted(pack.manifest.resolved_stickers_by_category.keys())
         sample = [
-            pack.manifest.resolved_stickers_by_category[c][0].params.model_copy(
-                update={"text": self._preview_label(i, c)}
-            )
+            pack.manifest.resolved_stickers_by_category[c][0].params.model_copy(update={"text": self._preview_label(i, c)})
             for i, c in enumerate(categories, 1)
         ]
         for s in sample:
@@ -247,12 +252,7 @@ class MemeStickersPlugin(Star):
                     yield event.plain_result("Hub 上无可用贴纸包")
                     return
                 sem = create_req_sem()
-                checksums = dict(
-                    zip(
-                        (x.slug for x in hub),
-                        await asyncio.gather(*(fetch_checksum(x.source, sem=sem) for x in hub)),
-                    )
-                )
+                checksums = dict(zip((x.slug for x in hub), await asyncio.gather(*(fetch_checksum(x.source, sem=sem) for x in hub))))
                 preview_cache = Path(StarTools.get_data_dir("astrbot_plugin_meme_stickers")) / "_preview_cache"
                 params = await temp_sticker_card_params(preview_cache, hub, manifests, checksums)
                 img = render_pack_list_bytes(params)
@@ -272,17 +272,15 @@ class MemeStickersPlugin(Star):
 
         if sub == "reload":
             op = self.pack_manager.reload(clear_updating_flags=True)
-            await self._ensure_emoji_font()
+            self._normalize_shared_fonts()
             self._reload_bundled_fonts()
-            self._bind_emoji_font_candidates()
             yield event.plain_result(f"已重载，成功 {len(op.succeed)}，失败 {len(op.failed)}")
             return
 
         if sub == "update":
             op, _ = await self.pack_manager.update_all(force=False)
-            await self._ensure_emoji_font()
+            self._normalize_shared_fonts()
             self._reload_bundled_fonts()
-            self._bind_emoji_font_candidates()
             yield event.plain_result(f"更新完成：成功 {len(op.succeed)}，跳过 {len(op.skipped)}，失败 {len(op.failed)}")
             return
 
@@ -294,23 +292,18 @@ class MemeStickersPlugin(Star):
                 yield event.plain_result("未找到可安装的贴纸包")
                 return
             op, _ = await self.pack_manager.install(infos)
-            await self._ensure_emoji_font()
+            self._normalize_shared_fonts()
             self._reload_bundled_fonts()
-            self._bind_emoji_font_candidates()
             yield event.plain_result(f"安装完成：成功 {len(op.succeed)}，失败 {len(op.failed)}")
             return
 
         if sub == "debug-fonts":
-            emoji_font = self.shared_fonts_dir / self.EMOJI_FONT_FILENAME
             lines = [
                 f"data_dir: {StarTools.get_data_dir('astrbot_plugin_meme_stickers')}",
                 f"shared_fonts_dir: {self.shared_fonts_dir}",
-                f"emoji_font_exists: {emoji_font.exists()}",
-                f"emoji_font_size: {emoji_font.stat().st_size if emoji_font.exists() else 0}",
                 f"bundled_fonts_count: {len(self.bundled_fonts)}",
             ]
-            for x in self.bundled_fonts[:12]:
-                lines.append(f"- {x}")
+            lines.extend(self.bundled_fonts[:12])
             yield self._plain(event, "\n".join(lines))
             return
 
@@ -399,7 +392,7 @@ class MemeStickersPlugin(Star):
                     params.font_style = sv
 
             image_format = opts.get("-f", opts.get("--image-format", ms_config.default_sticker_image_format))
-            auto_resize = ("-A" in opts or "--auto-resize" in opts) or not ("-N" in opts or "--no-auto-resize" in opts)
+            auto_resize = ("-A" in opts or "--auto-resize" in opts) or not ("-N" in opts or "--no-auto-resize")
 
             bg = None
             if image_format == "jpeg":
@@ -491,9 +484,7 @@ class MemeStickersPlugin(Star):
             st.step = "pick_category"
             categories = sorted(pack.manifest.resolved_stickers_by_category.keys())
             sample = [
-                pack.manifest.resolved_stickers_by_category[c][0].params.model_copy(
-                    update={"text": self._preview_label(i, c)}
-                )
+                pack.manifest.resolved_stickers_by_category[c][0].params.model_copy(update={"text": self._preview_label(i, c)})
                 for i, c in enumerate(categories, 1)
             ]
             for s in sample:
@@ -534,10 +525,7 @@ class MemeStickersPlugin(Star):
                 return
 
             st.step = "pick_sticker"
-            preview = [
-                x.params.model_copy(update={"text": self._preview_label(i, x.name)})
-                for i, x in enumerate(stickers, 1)
-            ]
+            preview = [x.params.model_copy(update={"text": self._preview_label(i, x.name)}) for i, x in enumerate(stickers, 1)]
             gp = pack.manifest.sticker_grid.resolved_stickers_params.get(c, pack.manifest.sticker_grid.default_params)
             for s in preview:
                 s.font_families = [*self.bundled_fonts, *s.font_families]
