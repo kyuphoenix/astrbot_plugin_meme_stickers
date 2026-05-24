@@ -12,8 +12,7 @@ from pilmoji import Pilmoji
 from ..consts import RGBAColorTuple, SkiaEncodedImageFormatType
 from ..sticker_pack.models import StickerParams, StickerGridParams
 
-EMOJI_SCALE = 1.18
-AA_SCALE = 2
+EMOJI_SCALE = 0.95
 
 
 def _rgba(c: RGBAColorTuple) -> tuple[int, int, int, int]:
@@ -131,14 +130,12 @@ def render_sticker_image(
         x0 = 4 - bb[0]
         y0 = 4 - bb[1]
         if stroke > 0:
-            mask = Image.new("L", (lay.width * AA_SCALE, lay.height * AA_SCALE), 0)
+            mask = Image.new("L", lay.size, 0)
             md = ImageDraw.Draw(mask)
-            aa_font = _pick_font(params.font_families, size * AA_SCALE)
-            md.text((x0 * AA_SCALE, y0 * AA_SCALE), text_no_emoji, font=aa_font, fill=255)
-            k = max(3, stroke * AA_SCALE * 2 + 1)
+            md.text((x0, y0), text_no_emoji, font=font, fill=255)
+            k = stroke * 2 + 1
             grown = mask.filter(ImageFilter.MaxFilter(size=max(3, k)))
             band = ImageChops.subtract(grown, mask)
-            band = band.resize(lay.size, Image.Resampling.LANCZOS)
             stroke_img = Image.new("RGBA", lay.size, _rgba(params.stroke_color))
             lay.paste(stroke_img, (0, 0), band)
         ld.text(
@@ -157,7 +154,7 @@ def render_sticker_image(
                 em = _render_one_emoji(ch, size, text_h)
                 alpha = em.split()[-1]
                 if alpha.getbbox():
-                    baseline_y = int(round(y0 + (h0 - em.height) * 0.55))
+                    baseline_y = int(round(y0 + (h0 - em.height) * 0.5))
                     if emoji_stroke > 0:
                         k = emoji_stroke * 2 + 1
                         grown = alpha.filter(ImageFilter.MaxFilter(size=max(3, k)))
