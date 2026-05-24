@@ -46,7 +46,12 @@ def _font(path_or_name: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.Im
 
 def _pick_font(font_families: Iterable[str], size: float) -> ImageFont.ImageFont:
     s = max(1, int(round(size)))
-    # Prefer emoji-capable fonts first for mixed text.
+    # Keep downloaded/pack fonts as first priority.
+    for name in font_families:
+        try:
+            return _font(name, s)
+        except Exception:
+            continue
     preferred = [
         "Noto Color Emoji",
         "Apple Color Emoji",
@@ -58,7 +63,21 @@ def _pick_font(font_families: Iterable[str], size: float) -> ImageFont.ImageFont
             return _font(name, s)
         except Exception:
             pass
-    for name in font_families:
+    return ImageFont.load_default()
+
+
+def _is_emoji_char(ch: str) -> bool:
+    cp = ord(ch)
+    return (
+        0x1F300 <= cp <= 0x1FAFF
+        or 0x2600 <= cp <= 0x27BF
+        or 0xFE00 <= cp <= 0xFE0F
+    )
+
+
+def _emoji_font(size: float) -> ImageFont.ImageFont:
+    s = max(1, int(round(size)))
+    for name in ("Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twitter Color Emoji"):
         try:
             return _font(name, s)
         except Exception:
@@ -92,15 +111,29 @@ def render_sticker_image(
         w0, h0 = bb[2] - bb[0], bb[3] - bb[1]
         lay = Image.new("RGBA", (max(1, w0 + 8), max(1, h0 + 8)), (0, 0, 0, 0))
         ld = ImageDraw.Draw(lay)
-        ld.text(
-            (4 - bb[0], 4 - bb[1]),
-            text,
-            font=font,
-            fill=_rgba(params.text_color),
-            stroke_fill=_rgba(params.stroke_color),
-            stroke_width=stroke,
-            embedded_color=True,
-        )
+        # Mixed-text renderer: keep normal chars on pack font, route emoji chars to emoji font.
+        x0 = 4 - bb[0]
+        y0 = 4 - bb[1]
+        efont = _emoji_font(size)
+        cx = x0
+        for ch in text:
+            use_emoji = _is_emoji_char(ch)
+            f = efont if use_emoji else font
+            if use_emoji:
+                ld.text((cx, y0), ch, font=f, embedded_color=True)
+                cb = ld.textbbox((cx, y0), ch, font=f, embedded_color=True)
+            else:
+                ld.text(
+                    (cx, y0),
+                    ch,
+                    font=f,
+                    fill=_rgba(params.text_color),
+                    stroke_fill=_rgba(params.stroke_color),
+                    stroke_width=stroke,
+                )
+                cb = ld.textbbox((cx, y0), ch, font=f, stroke_width=stroke)
+            cw = max(1, cb[2] - cb[0])
+            cx += cw
         _fill_text_holes(lay, _rgba(params.text_color))
         return lay, w0, h0
 
