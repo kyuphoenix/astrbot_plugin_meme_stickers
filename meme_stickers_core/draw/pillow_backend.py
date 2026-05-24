@@ -49,6 +49,16 @@ def _font(path_or_name: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.Im
     except Exception:
         return ImageFont.load_default()
 
+@lru_cache(maxsize=512)
+def _try_truetype(path_or_name: str, size: int) -> ImageFont.FreeTypeFont | None:
+    p = Path(path_or_name)
+    try:
+        if p.exists():
+            return ImageFont.truetype(str(p), size=size)
+        return ImageFont.truetype(path_or_name, size=size)
+    except Exception:
+        return None
+
 
 def _pick_font(font_families: Iterable[str], size: float) -> ImageFont.ImageFont:
     s = max(1, int(round(size)))
@@ -84,15 +94,13 @@ def _is_emoji_char(ch: str) -> bool:
 def _emoji_font(size: float) -> ImageFont.ImageFont:
     s = max(1, int(round(size)))
     for p in EMOJI_FONT_CANDIDATES:
-        try:
-            return _font(p, s)
-        except Exception:
-            continue
+        f = _try_truetype(p, s)
+        if f is not None:
+            return f
     for name in ("Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twitter Color Emoji"):
-        try:
-            return _font(name, s)
-        except Exception:
-            continue
+        f = _try_truetype(name, s)
+        if f is not None:
+            return f
     return ImageFont.load_default()
 
 
@@ -150,7 +158,10 @@ def render_sticker_image(
         for ch in text:
             if _is_emoji_char(ch):
                 px = x0 + ld.textlength(prefix, font=font)
-                ld.text((px, y0), ch, font=efont, embedded_color=True)
+                try:
+                    ld.text((px, y0), ch, font=efont, embedded_color=True)
+                except TypeError:
+                    ld.text((px, y0), ch, font=efont, fill=_rgba(params.text_color))
             prefix += ch
         return lay, w0, h0
 
