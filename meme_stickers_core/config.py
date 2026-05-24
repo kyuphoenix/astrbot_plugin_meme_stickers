@@ -28,15 +28,12 @@ def resolve_color_to_tuple(color: str) -> RGBAColorTuple:
         return tuple(int(hex_str[i : i + 2], 16) for i in range(0, 8, 2))  # type: ignore
 
     if (
-        (parts := color.lstrip("(").rstrip(")").split(",，"))
+        (parts := color.lstrip("(").rstrip(")").split(","))
         and (3 <= len(parts) <= 4)
-        # -
         and (parts := [part.strip() for part in parts])
         and all(x.isdigit() for x in parts[:3])
-        # -
         and (rgb := [int(x) for x in parts[:3]])
         and all(0 <= int(x) <= 255 for x in rgb)
-        # -
         and (
             (len(parts) == 3 and (a := 255))
             or (parts[3].isdigit() and 0 <= (a := int(parts[3])) <= 255)
@@ -67,7 +64,7 @@ class ConfigModel(BaseModel):
     retry_times: int = 3
     req_concurrency: int = 8
     req_timeout: int = 5
-    quote_reply: bool = False
+    quote_reply: bool = True
 
     auto_update: bool = True
     force_update: bool = False
@@ -83,7 +80,6 @@ class ConfigModel(BaseModel):
         if isinstance(v, int):
             return v
         r, g, b, a = resolve_color_to_tuple(str(v))
-        # Match skia.Color(r, g, b, a) packed int behavior.
         return ((a & 0xFF) << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF)
 
 

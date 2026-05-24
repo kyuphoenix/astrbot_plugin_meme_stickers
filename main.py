@@ -113,7 +113,7 @@ class MemeStickersPlugin(Star):
         p.write_bytes(data)
         try:
             if bool(getattr(ms_config, "quote_reply", False)):
-                reply = Comp.Reply(message_id=event.message_obj.message_id)
+                reply = Comp.Reply(id=event.message_obj.message_id)
                 img = Comp.Image.fromFileSystem(str(p))
                 yield event.chain_result([reply, img])
                 return
@@ -123,7 +123,7 @@ class MemeStickersPlugin(Star):
 
     def _plain(self, event: AstrMessageEvent, text: str):
         if bool(getattr(ms_config, "quote_reply", False)):
-            reply = Comp.Reply(message_id=event.message_obj.message_id)
+            reply = Comp.Reply(id=event.message_obj.message_id)
             return event.chain_result([reply, Comp.Plain(text)])
         return event.plain_result(text)
 
