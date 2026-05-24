@@ -46,6 +46,18 @@ def _font(path_or_name: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.Im
 
 def _pick_font(font_families: Iterable[str], size: float) -> ImageFont.ImageFont:
     s = max(1, int(round(size)))
+    # Prefer emoji-capable fonts first for mixed text.
+    preferred = [
+        "Noto Color Emoji",
+        "Apple Color Emoji",
+        "Segoe UI Emoji",
+        "Twitter Color Emoji",
+    ]
+    for name in preferred:
+        try:
+            return _font(name, s)
+        except Exception:
+            pass
     for name in font_families:
         try:
             return _font(name, s)
@@ -87,8 +99,9 @@ def render_sticker_image(
             fill=_rgba(params.text_color),
             stroke_fill=_rgba(params.stroke_color),
             stroke_width=stroke,
+            embedded_color=True,
         )
-        _fill_text_holes_white(lay)
+        _fill_text_holes(lay, _rgba(params.text_color))
         return lay, w0, h0
 
     layer, tw, th = make_layer(font_size)
@@ -118,10 +131,9 @@ def render_sticker_image(
     return canvas
 
 
-def _fill_text_holes_white(layer: Image.Image) -> None:
+def _fill_text_holes(layer: Image.Image, fill_rgba: tuple[int, int, int, int]) -> None:
     """
-    Fill enclosed transparent holes inside rendered glyphs with white.
-    This improves readability for letters like o/e/a/R on noisy backgrounds.
+    Fill enclosed transparent holes inside rendered glyphs with foreground color.
     """
     alpha = layer.getchannel("A")
     w, h = alpha.size
@@ -154,7 +166,7 @@ def _fill_text_holes_white(layer: Image.Image) -> None:
     for y in range(h):
         for x in range(w):
             if a[x, y] == 0 and not visited[y][x]:
-                px[x, y] = (255, 255, 255, 255)
+                px[x, y] = fill_rgba
 
 
 def encode_image(img: Image.Image, image_format: SkiaEncodedImageFormatType, quality: int = 95, background: int | None = None) -> bytes:
