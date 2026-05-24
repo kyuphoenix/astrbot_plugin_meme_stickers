@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
-from PIL import Image, ImageColor, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageFilter, ImageFont
 
 from ..consts import RGBAColorTuple, SkiaEncodedImageFormatType
 from ..sticker_pack.models import StickerParams, StickerGridParams
@@ -123,18 +123,21 @@ def render_sticker_image(
         lay = Image.new("RGBA", (max(1, w0 + 8), max(1, h0 + 8)), (0, 0, 0, 0))
         ld = ImageDraw.Draw(lay)
         # Keep text alignment stable while ensuring glyph holes are rendered naturally.
-        # Strategy: draw stroke-only layer first, then fill-only layer.
+        # Strategy: build stroke from glyph alpha mask (both outer + inner contours),
+        # then draw fill text on top.
         x0 = 4 - bb[0]
         y0 = 4 - bb[1]
         if stroke > 0:
-            ld.text(
-                (x0, y0),
-                text,
-                font=font,
-                fill=(0, 0, 0, 0),
-                stroke_fill=_rgba(params.stroke_color),
-                stroke_width=stroke,
-            )
+            mask = Image.new("L", lay.size, 0)
+            md = ImageDraw.Draw(mask)
+            md.text((x0, y0), text, font=font, fill=255)
+            # MaxFilter grows white region; subtract original mask to get contour band,
+            # which naturally includes inner-hole boundaries.
+            k = stroke * 2 + 1
+            grown = mask.filter(ImageFilter.MaxFilter(size=max(3, k)))
+            band = ImageChops.subtract(grown, mask)
+            stroke_img = Image.new("RGBA", lay.size, _rgba(params.stroke_color))
+            lay.alpha_composite(stroke_img, (0, 0), band)
         ld.text(
             (x0, y0),
             text,
