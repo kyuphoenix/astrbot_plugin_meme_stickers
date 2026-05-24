@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, cast
 
-import skia
 from pydantic import field_validator
 from pydantic import BaseModel, Field
 
@@ -82,7 +81,9 @@ class ConfigModel(BaseModel):
     def _validate_str_color_to_int(cls, v):  # noqa: N805
         if isinstance(v, int):
             return v
-        return skia.Color(*resolve_color_to_tuple(str(v)))
+        r, g, b, a = resolve_color_to_tuple(str(v))
+        # Match skia.Color(r, g, b, a) packed int behavior.
+        return ((a & 0xFF) << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF)
 
 
 DEFAULT_CONFIG = ConfigModel()

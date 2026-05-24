@@ -4,7 +4,6 @@ from pathlib import Path
 from typing_extensions import Unpack
 
 from ..consts import CHECKSUM_FILENAME, HUB_MANIFEST_FILENAME, MANIFEST_FILENAME
-from ..draw.pack_list import StickerPackCardParams
 import hashlib
 from ..config import config
 from ..utils.file_source import (
