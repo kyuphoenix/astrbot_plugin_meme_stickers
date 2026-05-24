@@ -3,6 +3,7 @@ from pathlib import Path
 import tempfile
 import asyncio
 
+import astrbot.api.message_components as Comp
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.all import AstrBotConfig
 from astrbot.api.star import Context, Star, StarTools
@@ -111,24 +112,19 @@ class MemeStickersPlugin(Star):
         p = Path(tempfile.gettempdir()) / f"meme_{suffix}_{id(event)}.{ext}"
         p.write_bytes(data)
         try:
-            quoted = bool(getattr(ms_config, "quote_reply", False))
-            if quoted:
-                try:
-                    yield event.image_result(str(p), quote=True)
-                    return
-                except TypeError:
-                    pass
+            if bool(getattr(ms_config, "quote_reply", False)):
+                reply = Comp.Reply(message_id=event.message_obj.message_id)
+                img = Comp.Image.fromFileSystem(str(p))
+                yield event.chain_result([reply, img])
+                return
             yield event.image_result(str(p))
         finally:
             p.unlink(missing_ok=True)
 
     def _plain(self, event: AstrMessageEvent, text: str):
-        quoted = bool(getattr(ms_config, "quote_reply", False))
-        if quoted:
-            try:
-                return event.plain_result(text, quote=True)
-            except TypeError:
-                pass
+        if bool(getattr(ms_config, "quote_reply", False)):
+            reply = Comp.Reply(message_id=event.message_obj.message_id)
+            return event.chain_result([reply, Comp.Plain(text)])
         return event.plain_result(text)
 
     @staticmethod
