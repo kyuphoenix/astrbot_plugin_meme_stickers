@@ -111,9 +111,25 @@ class MemeStickersPlugin(Star):
         p = Path(tempfile.gettempdir()) / f"meme_{suffix}_{id(event)}.{ext}"
         p.write_bytes(data)
         try:
+            quoted = bool(getattr(ms_config, "quote_reply", False))
+            if quoted:
+                try:
+                    yield event.image_result(str(p), quote=True)
+                    return
+                except TypeError:
+                    pass
             yield event.image_result(str(p))
         finally:
             p.unlink(missing_ok=True)
+
+    def _plain(self, event: AstrMessageEvent, text: str):
+        quoted = bool(getattr(ms_config, "quote_reply", False))
+        if quoted:
+            try:
+                return event.plain_result(text, quote=True)
+            except TypeError:
+                pass
+        return event.plain_result(text)
 
     @staticmethod
     def _parse_generate_args(tokens: list[str]) -> tuple[dict, list[str]]:
@@ -163,10 +179,10 @@ class MemeStickersPlugin(Star):
     async def _start_pack_interactive(self, event: AstrMessageEvent, pack_query: str):
         pack = self.pack_manager.find_pack(pack_query)
         if not pack:
-            yield event.plain_result(f"未找到贴纸包: {pack_query}")
+            yield self._plain(event, f"未找到贴纸包: {pack_query}")
             return
         if pack.unavailable:
-            yield event.plain_result(f"贴纸包不可用: {pack_query}")
+            yield self._plain(event, f"贴纸包不可用: {pack_query}")
             return
 
         self.sessions[self._sid(event)] = self._new_session(mode="generate", step="pick_category", pack_slug=pack.slug)
@@ -180,7 +196,7 @@ class MemeStickersPlugin(Star):
         img = render_sticker_grid_with_params_bytes(pack.base_path, pack.manifest.sticker_grid.resolved_category_params, sample)
         async for r in self._send_image(event, img, f"pick_category_{pack.slug}"):
             yield r
-        yield event.plain_result(f"已进入 {pack.slug} 交互式制作，请输入分类 名称/序号（输入 r 返回，0 退出）")
+        yield self._plain(event, f"已进入 {pack.slug} 交互式制作，请输入分类 名称/序号（输入 r 返回，0 退出）")
 
     @filter.command("meme-stickers", alias={"stickers"})
     async def meme_stickers(self, event: AstrMessageEvent):
@@ -358,13 +374,13 @@ class MemeStickersPlugin(Star):
 
         if self._is_exit(txt):
             self.sessions.pop(sid, None)
-            yield event.plain_result("已退出操作")
+            yield self._plain(event, "已退出操作")
             return
 
         if st.step == "confirm_manage":
             if txt.lower() != "y":
                 self.sessions.pop(sid, None)
-                yield event.plain_result("已取消操作")
+                yield self._plain(event, "已取消操作")
                 return
             ok, fail = 0, 0
             for q in st.targets or []:
@@ -385,7 +401,7 @@ class MemeStickersPlugin(Star):
                 except Exception:
                     fail += 1
             self.sessions.pop(sid, None)
-            yield event.plain_result(f"{st.mode} 完成：成功 {ok}，失败 {fail}")
+            yield self._plain(event, f"{st.mode} 完成：成功 {ok}，失败 {fail}")
             return
 
         if st.step == "pick_pack":
@@ -396,7 +412,7 @@ class MemeStickersPlugin(Star):
             if not pack:
                 pack = self.pack_manager.find_pack(txt)
             if not pack:
-                yield event.plain_result("未找到贴纸包，请重新输入")
+                yield self._plain(event, "未找到贴纸包，请重新输入")
                 return
             st.pack_slug = pack.slug
             st.step = "pick_category"
@@ -410,18 +426,18 @@ class MemeStickersPlugin(Star):
             img = render_sticker_grid_with_params_bytes(pack.base_path, pack.manifest.sticker_grid.resolved_category_params, sample)
             async for r in self._send_image(event, img, "pick_category"):
                 yield r
-            yield event.plain_result("请输入分类 名称/序号（输入 r 返回）")
+            yield self._plain(event, "请输入分类 名称/序号（输入 r 返回）")
             return
 
         if st.step == "pick_category":
             pack = self.pack_manager.find_pack(st.pack_slug or "")
             if not pack:
                 self.sessions.pop(sid, None)
-                yield event.plain_result("贴纸包不可用，操作结束")
+                yield self._plain(event, "贴纸包不可用，操作结束")
                 return
             if self._is_back(txt):
                 st.step = "pick_pack"
-                yield event.plain_result("已返回贴纸包选择，请输入贴纸包 序号/slug/名称")
+                yield self._plain(event, "已返回贴纸包选择，请输入贴纸包 序号/slug/名称")
                 return
 
             categories = sorted(pack.manifest.resolved_stickers_by_category.keys())
@@ -431,7 +447,7 @@ class MemeStickersPlugin(Star):
             if not c:
                 c = next((x for x in categories if x.lower() == txt.lower()), None)
             if not c:
-                yield event.plain_result("未找到分类，请重新输入")
+                yield self._plain(event, "未找到分类，请重新输入")
                 return
 
             st.category = c
@@ -439,7 +455,7 @@ class MemeStickersPlugin(Star):
             if len(stickers) == 1:
                 st.sticker_name = stickers[0].name
                 st.step = "input_text"
-                yield event.plain_result("该分类只有一个贴纸，请直接输入要添加的文字")
+                yield self._plain(event, "该分类只有一个贴纸，请直接输入要添加的文字")
                 return
 
             st.step = "pick_sticker"
@@ -450,18 +466,18 @@ class MemeStickersPlugin(Star):
             img = render_sticker_grid_with_params_bytes(pack.base_path, gp, preview)
             async for r in self._send_image(event, img, "pick_sticker"):
                 yield r
-            yield event.plain_result("请输入贴纸 名称/序号（输入 r 返回分类）")
+            yield self._plain(event, "请输入贴纸 名称/序号（输入 r 返回分类）")
             return
 
         if st.step == "pick_sticker":
             pack = self.pack_manager.find_pack(st.pack_slug or "")
             if not pack:
                 self.sessions.pop(sid, None)
-                yield event.plain_result("贴纸包不可用，操作结束")
+                yield self._plain(event, "贴纸包不可用，操作结束")
                 return
             if self._is_back(txt):
                 st.step = "pick_category"
-                yield event.plain_result("已返回分类选择，请输入分类 名称/序号")
+                yield self._plain(event, "已返回分类选择，请输入分类 名称/序号")
                 return
 
             stickers = pack.manifest.resolved_stickers_by_category.get(st.category or "", [])
@@ -471,24 +487,24 @@ class MemeStickersPlugin(Star):
             if not sticker:
                 sticker = next((x for x in stickers if x.name.lower() == txt.lower()), None)
             if not sticker:
-                yield event.plain_result("未找到贴纸，请重新输入")
+                yield self._plain(event, "未找到贴纸，请重新输入")
                 return
 
             st.sticker_name = sticker.name
             st.step = "input_text"
-            yield event.plain_result("请输入贴纸文本")
+            yield self._plain(event, "请输入贴纸文本")
             return
 
         if st.step == "input_text":
             pack = self.pack_manager.find_pack(st.pack_slug or "")
             if not pack:
                 self.sessions.pop(sid, None)
-                yield event.plain_result("贴纸包不可用，操作结束")
+                yield self._plain(event, "贴纸包不可用，操作结束")
                 return
             sticker = pack.manifest.find_sticker_by_name(st.sticker_name or "")
             if not sticker:
                 self.sessions.pop(sid, None)
-                yield event.plain_result("贴纸不可用，操作结束")
+                yield self._plain(event, "贴纸不可用，操作结束")
                 return
 
             user_text = txt.strip()

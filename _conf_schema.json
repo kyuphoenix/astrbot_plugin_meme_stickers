@@ -29,6 +29,11 @@
     "type": "int",
     "default": 5
   },
+  "quote_reply": {
+    "description": "交互回复是否引用触发消息",
+    "type": "bool",
+    "default": false
+  },
   "default_sticker_image_format": {
     "description": "默认图片格式",
     "type": "string",

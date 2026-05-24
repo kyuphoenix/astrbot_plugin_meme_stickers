@@ -67,6 +67,7 @@ class ConfigModel(BaseModel):
     retry_times: int = 3
     req_concurrency: int = 8
     req_timeout: int = 5
+    quote_reply: bool = False
 
     auto_update: bool = True
     force_update: bool = False
