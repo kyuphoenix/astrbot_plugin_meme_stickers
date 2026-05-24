@@ -22,6 +22,16 @@ def _fit_contain(w: float, h: float, tw: float, th: float) -> tuple[float, float
     return r, rw, rh, (tw - rw) / 2, (th - rh) / 2
 
 
+@lru_cache(maxsize=512)
+def _open_rgba(path: str) -> Image.Image:
+    return Image.open(path).convert("RGBA")
+
+
+@lru_cache(maxsize=1024)
+def _resize_cached(path: str, w: int, h: int) -> Image.Image:
+    return _open_rgba(path).resize((w, h), Image.Resampling.LANCZOS)
+
+
 @lru_cache(maxsize=256)
 def _font(path_or_name: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     p = Path(path_or_name)
@@ -49,9 +59,10 @@ def render_sticker_image(
     auto_resize: bool = False,
 ) -> Image.Image:
     canvas = Image.new("RGBA", (params.width, params.height), (0, 0, 0, 0))
-    bg = Image.open(base_path / params.base_image).convert("RGBA")
+    src_path = str(base_path / params.base_image)
+    bg = _open_rgba(src_path)
     _, rw, rh, ox, oy = _fit_contain(bg.width, bg.height, params.width, params.height)
-    bg = bg.resize((int(round(rw)), int(round(rh))), Image.Resampling.LANCZOS)
+    bg = _resize_cached(src_path, int(round(rw)), int(round(rh)))
     canvas.alpha_composite(bg, (int(round(ox)), int(round(oy))))
 
     text = params.text or ""
@@ -128,11 +139,16 @@ def render_sticker_grid_bytes(base_path: Path, stickers: list[StickerParams], co
     cols = max(1, min(cols, len(stickers)))
     rows = math.ceil(len(stickers) / cols)
     out = Image.new("RGBA", (pad * 2 + cols * max_w + (cols - 1) * gap, pad * 2 + rows * max_h + (rows - 1) * gap), bg)
+    tile_cache: dict[tuple[str, int, int, str], Image.Image] = {}
     for i, s in enumerate(stickers):
         r, c = divmod(i, cols)
         x = pad + c * (max_w + gap)
         y = pad + r * (max_h + gap)
-        tile = render_sticker_image(base_path, s, auto_resize=True)
+        k = (s.base_image, s.width, s.height, s.text)
+        tile = tile_cache.get(k)
+        if tile is None:
+            tile = render_sticker_image(base_path, s, auto_resize=True)
+            tile_cache[k] = tile
         _, rw, rh, ox, oy = _fit_contain(tile.width, tile.height, max_w, max_h)
         tile = tile.resize((int(rw), int(rh)), Image.Resampling.LANCZOS)
         out.alpha_composite(tile, (int(x + ox), int(y + oy)))
@@ -164,21 +180,27 @@ def render_sticker_grid_with_params_bytes(base_path: Path, grid: StickerGridPara
 
     # Grid background: support color tuple or image path.
     if isinstance(grid.background, str):
-        bg = Image.open(base_path / grid.background).convert("RGBA")
+        bg_src = str(base_path / grid.background)
+        bg = _open_rgba(bg_src)
         ratio = max(w / bg.width, h / bg.height)
         rw, rh = int(bg.width * ratio), int(bg.height * ratio)
-        bg = bg.resize((rw, rh), Image.Resampling.LANCZOS)
+        bg = _resize_cached(bg_src, rw, rh)
         ox = int((w - rw) / 2)
         oy = 0  # top-aligned cover
         out.alpha_composite(bg, (ox, oy))
     else:
         out = Image.new("RGBA", (w, h), _rgba(grid.background))
 
+    tile_cache: dict[tuple[str, int, int, str], Image.Image] = {}
     for i, s in enumerate(stickers):
         r, c = divmod(i, cols)
         x = pad_l + c * (max_w + gap_x)
         y = pad_t + r * (max_h + gap_y)
-        tile = render_sticker_image(base_path, s, auto_resize=True)
+        k = (s.base_image, s.width, s.height, s.text)
+        tile = tile_cache.get(k)
+        if tile is None:
+            tile = render_sticker_image(base_path, s, auto_resize=True)
+            tile_cache[k] = tile
         _, rw, rh, ox, oy = _fit_contain(tile.width, tile.height, max_w, max_h)
         tile = tile.resize((int(rw), int(rh)), Image.Resampling.LANCZOS)
         out.alpha_composite(tile, (int(x + ox), int(y + oy)))
