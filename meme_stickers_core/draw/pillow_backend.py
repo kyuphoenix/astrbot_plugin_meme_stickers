@@ -5,6 +5,7 @@ import math
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
+from collections import deque
 
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
@@ -96,6 +97,7 @@ def render_sticker_image(
         stroke_fill=_rgba(params.stroke_color),
         stroke_width=stroke_w,
     )
+    _fill_text_holes_white(layer)
 
     if abs(float(params.text_rotate_degrees)) > 1e-6:
         # Match legacy skia visual direction: positive degree should slope upward to the right.
@@ -108,6 +110,45 @@ def render_sticker_image(
 
     canvas.alpha_composite(layer, (tx, ty))
     return canvas
+
+
+def _fill_text_holes_white(layer: Image.Image) -> None:
+    """
+    Fill enclosed transparent holes inside rendered glyphs with white.
+    This improves readability for letters like o/e/a/R on noisy backgrounds.
+    """
+    alpha = layer.getchannel("A")
+    w, h = alpha.size
+    a = alpha.load()
+    visited = [[False] * w for _ in range(h)]
+    q: deque[tuple[int, int]] = deque()
+
+    # Flood-fill from borders through transparent area: mark outside transparent region.
+    def push_if_transparent(x: int, y: int):
+        if 0 <= x < w and 0 <= y < h and (not visited[y][x]) and a[x, y] == 0:
+            visited[y][x] = True
+            q.append((x, y))
+
+    for x in range(w):
+        push_if_transparent(x, 0)
+        push_if_transparent(x, h - 1)
+    for y in range(h):
+        push_if_transparent(0, y)
+        push_if_transparent(w - 1, y)
+
+    while q:
+        x, y = q.popleft()
+        push_if_transparent(x + 1, y)
+        push_if_transparent(x - 1, y)
+        push_if_transparent(x, y + 1)
+        push_if_transparent(x, y - 1)
+
+    # Transparent pixels not reachable from border are enclosed holes.
+    px = layer.load()
+    for y in range(h):
+        for x in range(w):
+            if a[x, y] == 0 and not visited[y][x]:
+                px[x, y] = (255, 255, 255, 255)
 
 
 def encode_image(img: Image.Image, image_format: SkiaEncodedImageFormatType, quality: int = 95, background: int | None = None) -> bytes:
