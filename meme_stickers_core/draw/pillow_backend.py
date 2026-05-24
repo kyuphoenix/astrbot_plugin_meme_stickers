@@ -12,7 +12,8 @@ from pilmoji import Pilmoji
 from ..consts import RGBAColorTuple, SkiaEncodedImageFormatType
 from ..sticker_pack.models import StickerParams, StickerGridParams
 
-EMOJI_SCALE = 0.95
+EMOJI_SCALE = 1.18
+AA_SCALE = 2
 
 
 def _rgba(c: RGBAColorTuple) -> tuple[int, int, int, int]:
@@ -96,14 +97,24 @@ def render_sticker_image(
     draw = ImageDraw.Draw(canvas)
     font_size = float(params.font_size)
 
-    def _render_one_emoji(ch: str, size: float) -> Image.Image:
-        side = max(24, int(round(size * 1.8)))
+    def _render_one_emoji(ch: str, size: float, target_h: int) -> Image.Image:
+        side = max(48, int(round(size * 2.6)))
         em = Image.new("RGBA", (side, side), (0, 0, 0, 0))
         try:
             with Pilmoji(em) as pm:
                 pm.text((0, 0), ch, fill=(255, 255, 255, 255), emoji_scale_factor=EMOJI_SCALE)
         except Exception:
             return em
+        alpha = em.split()[-1]
+        box = alpha.getbbox()
+        if not box:
+            return em
+        em = em.crop(box)
+        if target_h > 0 and em.height > 0:
+            ratio = target_h / em.height
+            nw = max(1, int(round(em.width * ratio)))
+            nh = max(1, int(round(em.height * ratio)))
+            em = em.resize((nw, nh), Image.Resampling.LANCZOS)
         return em
 
     def make_layer(size: float):
@@ -120,14 +131,14 @@ def render_sticker_image(
         x0 = 4 - bb[0]
         y0 = 4 - bb[1]
         if stroke > 0:
-            mask = Image.new("L", lay.size, 0)
+            mask = Image.new("L", (lay.width * AA_SCALE, lay.height * AA_SCALE), 0)
             md = ImageDraw.Draw(mask)
-            md.text((x0, y0), text_no_emoji, font=font, fill=255)
-            # MaxFilter grows white region; subtract original mask to get contour band,
-            # which naturally includes inner-hole boundaries.
-            k = stroke * 2 + 1
+            aa_font = _pick_font(params.font_families, size * AA_SCALE)
+            md.text((x0 * AA_SCALE, y0 * AA_SCALE), text_no_emoji, font=aa_font, fill=255)
+            k = max(3, stroke * AA_SCALE * 2 + 1)
             grown = mask.filter(ImageFilter.MaxFilter(size=max(3, k)))
             band = ImageChops.subtract(grown, mask)
+            band = band.resize(lay.size, Image.Resampling.LANCZOS)
             stroke_img = Image.new("RGBA", lay.size, _rgba(params.stroke_color))
             lay.paste(stroke_img, (0, 0), band)
         ld.text(
@@ -139,23 +150,21 @@ def render_sticker_image(
         # Overlay color emoji one-by-one at measured glyph positions.
         prefix = ""
         emoji_stroke = max(1, int(round(stroke * 0.6))) if stroke > 0 else 0
+        text_h = max(1, h0)
         for ch in text:
             if _is_emoji_char(ch):
                 px = int(round(x0 + ld.textlength(prefix, font=font)))
-                em = _render_one_emoji(ch, size)
+                em = _render_one_emoji(ch, size, text_h)
                 alpha = em.split()[-1]
                 if alpha.getbbox():
-                    # Trim transparent border for tighter placement.
-                    box = alpha.getbbox()
-                    em = em.crop(box)
-                    alpha = alpha.crop(box)
+                    baseline_y = int(round(y0 + (h0 - em.height) * 0.55))
                     if emoji_stroke > 0:
                         k = emoji_stroke * 2 + 1
                         grown = alpha.filter(ImageFilter.MaxFilter(size=max(3, k)))
                         band = ImageChops.subtract(grown, alpha)
                         stroke_img = Image.new("RGBA", em.size, _rgba(params.stroke_color))
-                        lay.paste(stroke_img, (px, int(round(y0))), band)
-                    lay.paste(em, (px, int(round(y0))), alpha)
+                        lay.paste(stroke_img, (px, baseline_y), band)
+                    lay.paste(em, (px, baseline_y), alpha)
             prefix += ch
         return lay, w0, h0
 
