@@ -9,7 +9,7 @@ from typing import Iterable
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 from ..consts import RGBAColorTuple, SkiaEncodedImageFormatType
-from ..sticker_pack.models import StickerParams
+from ..sticker_pack.models import StickerParams, StickerGridParams
 
 
 def _rgba(c: RGBAColorTuple) -> tuple[int, int, int, int]:
@@ -136,6 +136,53 @@ def render_sticker_grid_bytes(base_path: Path, stickers: list[StickerParams], co
         _, rw, rh, ox, oy = _fit_contain(tile.width, tile.height, max_w, max_h)
         tile = tile.resize((int(rw), int(rh)), Image.Resampling.LANCZOS)
         out.alpha_composite(tile, (int(x + ox), int(y + oy)))
+    return encode_image(out, "jpeg")
+
+
+def render_sticker_grid_with_params_bytes(base_path: Path, grid: StickerGridParams, stickers: list[StickerParams]) -> bytes:
+    if not stickers:
+        return encode_image(Image.new("RGBA", (16, 16), (0, 0, 0, 0)), "jpeg")
+
+    pad_t, pad_r, pad_b, pad_l = map(int, grid.resolved_padding)
+    gap_x, gap_y = map(int, grid.resolved_gap)
+
+    max_w = max(s.width for s in stickers)
+    max_h = max(s.height for s in stickers)
+    if grid.sticker_size_fixed:
+        max_w, max_h = int(grid.sticker_size_fixed[0]), int(grid.sticker_size_fixed[1])
+
+    if grid.rows is not None:
+        rows = min(int(grid.rows), len(stickers))
+        cols = math.ceil(len(stickers) / max(1, rows))
+    else:
+        cols = max(1, min(int(grid.cols or 1), len(stickers)))
+        rows = math.ceil(len(stickers) / cols)
+
+    w = pad_l + pad_r + cols * max_w + (cols - 1) * gap_x
+    h = pad_t + pad_b + rows * max_h + (rows - 1) * gap_y
+    out = Image.new("RGBA", (w, h), (40, 44, 52, 255))
+
+    # Grid background: support color tuple or image path.
+    if isinstance(grid.background, str):
+        bg = Image.open(base_path / grid.background).convert("RGBA")
+        ratio = max(w / bg.width, h / bg.height)
+        rw, rh = int(bg.width * ratio), int(bg.height * ratio)
+        bg = bg.resize((rw, rh), Image.Resampling.LANCZOS)
+        ox = int((w - rw) / 2)
+        oy = 0  # top-aligned cover
+        out.alpha_composite(bg, (ox, oy))
+    else:
+        out = Image.new("RGBA", (w, h), _rgba(grid.background))
+
+    for i, s in enumerate(stickers):
+        r, c = divmod(i, cols)
+        x = pad_l + c * (max_w + gap_x)
+        y = pad_t + r * (max_h + gap_y)
+        tile = render_sticker_image(base_path, s, auto_resize=True)
+        _, rw, rh, ox, oy = _fit_contain(tile.width, tile.height, max_w, max_h)
+        tile = tile.resize((int(rw), int(rh)), Image.Resampling.LANCZOS)
+        out.alpha_composite(tile, (int(x + ox), int(y + oy)))
+
     return encode_image(out, "jpeg")
 
 

@@ -16,6 +16,7 @@ from .meme_stickers_core.draw.pillow_backend import (
     render_sticker_image,
     encode_image,
     render_sticker_grid_bytes,
+    render_sticker_grid_with_params_bytes,
     render_pack_list_bytes,
 )
 
@@ -146,6 +147,7 @@ class MemeStickersPlugin(Star):
         for i, p in enumerate(packs, 1):
             s = p.manifest.resolved_sample_sticker.model_copy(deep=True)
             s.text = f"{i}. {p.manifest.name} [{p.slug}]"
+            s.font_families = [*self.bundled_fonts, *s.font_families]
             items.append(
                 dict(
                     base_path=p.base_path,
@@ -173,7 +175,9 @@ class MemeStickersPlugin(Star):
             pack.manifest.resolved_stickers_by_category[c][0].params.model_copy(update={"text": f"{i}. {c}"})
             for i, c in enumerate(categories, 1)
         ]
-        img = render_sticker_grid_bytes(pack.base_path, sample, cols=2)
+        for s in sample:
+            s.font_families = [*self.bundled_fonts, *s.font_families]
+        img = render_sticker_grid_with_params_bytes(pack.base_path, pack.manifest.sticker_grid.resolved_category_params, sample)
         async for r in self._send_image(event, img, f"pick_category_{pack.slug}"):
             yield r
         yield event.plain_result(f"已进入 {pack.slug} 交互式制作，请输入分类 名称/序号（输入 r 返回，0 退出）")
@@ -401,7 +405,9 @@ class MemeStickersPlugin(Star):
                 pack.manifest.resolved_stickers_by_category[c][0].params.model_copy(update={"text": f"{i}. {c}"})
                 for i, c in enumerate(categories, 1)
             ]
-            img = render_sticker_grid_bytes(pack.base_path, sample, cols=2)
+            for s in sample:
+                s.font_families = [*self.bundled_fonts, *s.font_families]
+            img = render_sticker_grid_with_params_bytes(pack.base_path, pack.manifest.sticker_grid.resolved_category_params, sample)
             async for r in self._send_image(event, img, "pick_category"):
                 yield r
             yield event.plain_result("请输入分类 名称/序号（输入 r 返回）")
@@ -439,7 +445,9 @@ class MemeStickersPlugin(Star):
             st.step = "pick_sticker"
             preview = [x.params.model_copy(update={"text": f"{i}. {x.name}"}) for i, x in enumerate(stickers, 1)]
             gp = pack.manifest.sticker_grid.resolved_stickers_params.get(c, pack.manifest.sticker_grid.default_params)
-            img = render_sticker_grid_bytes(pack.base_path, preview, cols=(gp.cols or 2))
+            for s in preview:
+                s.font_families = [*self.bundled_fonts, *s.font_families]
+            img = render_sticker_grid_with_params_bytes(pack.base_path, gp, preview)
             async for r in self._send_image(event, img, "pick_sticker"):
                 yield r
             yield event.plain_result("请输入贴纸 名称/序号（输入 r 返回分类）")
