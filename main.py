@@ -300,6 +300,41 @@ class MemeStickersPlugin(Star):
             yield event.plain_result(f"安装完成：成功 {len(op.succeed)}，失败 {len(op.failed)}")
             return
 
+        if sub == "debug-fonts":
+            emoji_font = self.shared_fonts_dir / self.EMOJI_FONT_FILENAME
+            lines = [
+                f"data_dir: {StarTools.get_data_dir('astrbot_plugin_meme_stickers')}",
+                f"shared_fonts_dir: {self.shared_fonts_dir}",
+                f"emoji_font_exists: {emoji_font.exists()}",
+                f"emoji_font_size: {emoji_font.stat().st_size if emoji_font.exists() else 0}",
+                f"bundled_fonts_count: {len(self.bundled_fonts)}",
+            ]
+            for x in self.bundled_fonts[:12]:
+                lines.append(f"- {x}")
+            yield self._plain(event, "\n".join(lines))
+            return
+
+        if sub == "debug-emoji":
+            test_text = " ".join(args[1:]).strip() or "Crimson Throne 😈 😀 👍 ❤️"
+            img = None
+            for p in self.pack_manager.available_packs:
+                try:
+                    s = p.manifest.resolved_sample_sticker.model_copy(deep=True)
+                    s.text = test_text
+                    s.font_families = [*self.bundled_fonts, *s.font_families]
+                    pil_img = render_sticker_image(p.base_path, s, auto_resize=True)
+                    img = encode_image(pil_img, "png")
+                    break
+                except Exception:
+                    continue
+            if not img:
+                yield self._plain(event, "debug-emoji: 无可用贴纸包用于测试")
+                return
+            async for r in self._send_image(event, img, "debug_emoji", "png"):
+                yield r
+            yield self._plain(event, f"debug-emoji text: {test_text}")
+            return
+
         if sub in {"delete", "enable", "disable"}:
             if len(args) < 2:
                 yield event.plain_result(f"用法: /meme-stickers {sub} <pack...>")
