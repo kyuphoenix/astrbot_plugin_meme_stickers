@@ -5,7 +5,6 @@ import skia
 
 from ..sticker_pack.models import StickerParams
 from .tools import (
-    FALLBACK_SYSTEM_FONTS,
     FONT_STYLE_FUNC_MAP,
     TEXT_ALIGN_MAP,
     calc_rotated_bounding_box_xywh,
@@ -69,7 +68,9 @@ def make_sticker_picture(
     if not text:
         return pic_recorder.finishRecordingAsPicture()
 
-    font_families = [*font_families, *FALLBACK_SYSTEM_FONTS]
+    # Intentionally disable system fallback fonts for easier troubleshooting.
+    # The plugin should use bundled fonts from packs/_shared (or manifest font paths).
+    font_families = [*font_families]
 
     para_style = skia.textlayout.ParagraphStyle()
     para_style.setTextAlign(text_align)
