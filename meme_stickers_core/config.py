@@ -29,7 +29,7 @@ def resolve_color_to_tuple(color: str) -> RGBAColorTuple:
         return tuple(int(hex_str[i : i + 2], 16) for i in range(0, 8, 2))  # type: ignore
 
     if (
-        (parts := color.lstrip("(").rstrip(")").split(",，"))
+        (parts := color.lstrip("(").rstrip(")").split(","))
         and (3 <= len(parts) <= 4)
         # -
         and (parts := [part.strip() for part in parts])
@@ -76,7 +76,10 @@ class ConfigModel(BaseModel):
     prompt_timeout: int = 30
 
     default_sticker_background: int = 0xFFFFFFFF
-    default_sticker_image_format: SkiaEncodedImageFormatType = "png"
+    quote_reply: bool = True
+    interactive_preview_image_format: SkiaEncodedImageFormatType = "jpeg"
+    final_sticker_image_format: SkiaEncodedImageFormatType = "png"
+    non_png_quality: int = 95
 
     @field_validator("default_sticker_background", mode="before")
     def _validate_str_color_to_int(cls, v):  # noqa: N805

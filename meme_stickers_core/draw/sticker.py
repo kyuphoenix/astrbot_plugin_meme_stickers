@@ -1,4 +1,4 @@
-﻿import math
+import math
 from pathlib import Path
 
 import skia
