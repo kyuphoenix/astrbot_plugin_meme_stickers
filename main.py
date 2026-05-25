@@ -206,6 +206,7 @@ class MemeStickersPlugin(Star):
 
     @filter.command("meme-stickers", alias={"stickers"})
     async def meme_stickers(self, event: AstrMessageEvent):
+        """管理贴纸包、查看列表、安装资源，并支持按指定贴纸直接生成表情包。"""
         parts = event.get_message_str().strip().split()
         args = parts[1:] if len(parts) > 1 else []
         if not args or args[0] in {"help", "-h", "--help"}:
@@ -408,11 +409,13 @@ class MemeStickersPlugin(Star):
 
     @filter.command("pjsk")
     async def pjsk_cmd(self, event: AstrMessageEvent):
+        """进入 Project Sekai 贴纸包的交互式制作流程。"""
         async for r in self._start_pack_interactive(event, "pjsk"):
             yield r
 
     @filter.command("arc", alias={"arcaea"})
     async def arc_cmd(self, event: AstrMessageEvent):
+        """进入 Arcaea 贴纸包的交互式制作流程。"""
         async for r in self._start_pack_interactive(event, "arcaea"):
             yield r
 
