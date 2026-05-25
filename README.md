@@ -2,6 +2,25 @@
 
 本插件由 [lgc-NB2Dev/nonebot-plugin-meme-stickers](https://github.com/lgc-NB2Dev/nonebot-plugin-meme-stickers) 迁移而来，面向 AstrBot 运行环境重构。
 
+# 安装失败必看！！！
+## 安装后提示 `libEGL.so.1` 缺失？
+
+由于本插件基于 `Skia` 图形引擎开发，在Docker镜像或者部分系统中运行时，可能会因为缺少系统底层的图形加速依赖而报错：
+> `AssertionError: libEGL.so.1: cannot open shared object file: No such file or directory`
+
+**无需重建容器**，只需两步即可手动补全依赖：
+
+### 1. 进入 AstrBot 容器(宿主机直接运行程序请跳过)
+打开宿主机终端，运行以下命令进入你的 AstrBot 容器内部：
+```bash
+docker exec -it -u root astrbot /bin/bash
+```
+### 2. 输入下面的命令
+```bash
+apt-get update && apt-get install -y libegl1 libgl1 libglib2.0-0t64 libfontconfig1 libpng-dev libjpeg-dev fontconfig && fc-cache -fv
+```
+> 该命令只能在`docker容器`或者`debian/ubuntu`系统运行。如果宿主机是其他系统，可以自行ai如何补全libEGL.so库
+
 ## 插件信息
 
 - 插件名：`astrbot_plugin_meme_stickers`
