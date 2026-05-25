@@ -138,12 +138,12 @@ class StickerPackManager:
         manifest: StickerPackManifest | None = None,
         **req_kw: Unpack[ReqKwargs],
     ) -> tuple[OpInfo[StickerPack | str], dict[str, UpdatedResourcesInfo]]:
-        if p := next((self.find_pack_by_slug(x.slug) for x in infos), None):
-            raise ValueError(f"Pack `{p.slug}` already loaded")
-
         op_info = OpInfo[StickerPack | str]()
 
         async def do_install(info: HubStickerPackInfo):
+            if p := self.find_pack_by_slug(info.slug):
+                op_info.skipped.append(OpIt(p, "已安装，跳过"))
+                return None
             pack_path = self.base_path / info.slug
             try:
                 res = await update_sticker_pack(

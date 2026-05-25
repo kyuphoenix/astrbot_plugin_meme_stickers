@@ -8,8 +8,8 @@ import skia
 from ..consts import SkiaEncodedImageFormatType, SkiaFontStyleType, SkiaTextAlignType
 
 font_mgr = skia.FontMgr()
-font_collection = skia.textlayout.FontCollection()
-font_collection.setDefaultFontManager(font_mgr)
+_LAST_USED_FONT_PATH: str = ""
+_ASSET_PROVIDER = None
 
 SYSTEM_MONOSPACE_FONTS = [
     "JetBrains Mono",
@@ -64,10 +64,30 @@ IMAGE_FORMAT_MAP: dict[SkiaEncodedImageFormatType, skia.EncodedImageFormat] = {
 }
 
 
-def make_paragraph_builder(style: skia.textlayout_ParagraphStyle):
+def _build_font_collection(font_families: list[str]) -> skia.textlayout_FontCollection:
+    fc = skia.textlayout.FontCollection()
+    fc.setDefaultFontManager(font_mgr)
+    path_fonts = [x for x in font_families if Path(x).exists()]
+    if path_fonts:
+        try:
+            provider = skia.textlayout.TypefaceFontProvider()
+            for fp in path_fonts:
+                tf = skia.Typeface.MakeFromFile(fp)
+                if not tf:
+                    continue
+                fam = tf.getFamilyName() or Path(fp).stem
+                provider.registerTypeface(tf, fam)
+            fc.setAssetFontManager(provider)
+        except Exception:
+            pass
+    return fc
+
+
+def make_paragraph_builder(style: skia.textlayout_ParagraphStyle, font_families: list[str] | None = None):
+    fc = _build_font_collection(font_families or [])
     return skia.textlayout.ParagraphBuilder.make(
         style,
-        font_collection,
+        fc,
         skia.Unicodes.ICU.Make(),
     )
 
@@ -75,10 +95,11 @@ def make_paragraph_builder(style: skia.textlayout_ParagraphStyle):
 def make_simple_paragraph(
     paragraph_style: skia.textlayout_ParagraphStyle,
     text_style: skia.textlayout_TextStyle,
+    font_families: list[str],
     text: str,
     layout: bool = True,
 ):
-    builder = make_paragraph_builder(paragraph_style)
+    builder = make_paragraph_builder(paragraph_style, font_families)
     builder.pushStyle(text_style)
     builder.addText(text)
     p = builder.Build()
@@ -110,15 +131,37 @@ def make_text_style(
     path_fonts = [x for x in font_families if Path(x).exists()]
     name_fonts = [x for x in font_families if not Path(x).exists()]
     # Prefer explicit font files from plugin data dir over system fonts.
+    global _LAST_USED_FONT_PATH
     if path_fonts and hasattr(style, "setTypeface"):
         for fp in path_fonts:
             tf = skia.Typeface.MakeFromFile(fp)
             if tf:
                 try:
                     style.setTypeface(tf)
+                    _LAST_USED_FONT_PATH = fp
                     break
                 except Exception:
                     pass
+    elif path_fonts:
+        # Fallback path for skia builds without TextStyle.setTypeface:
+        # register file fonts into a TypefaceFontProvider and bind as asset font manager.
+        try:
+            global _ASSET_PROVIDER
+            provider = skia.textlayout.TypefaceFontProvider()
+            added = False
+            for fp in path_fonts:
+                tf = skia.Typeface.MakeFromFile(fp)
+                if not tf:
+                    continue
+                fam = tf.getFamilyName() or Path(fp).stem
+                provider.registerTypeface(tf, fam)
+                _LAST_USED_FONT_PATH = fp
+                added = True
+            if added:
+                _ASSET_PROVIDER = provider
+                font_collection.setAssetFontManager(provider)
+        except Exception:
+            pass
     resolved_families = list(name_fonts)
     if path_fonts:
         # Resolve font family names from file paths for skia builds
@@ -142,6 +185,10 @@ def _font_family_from_file(path: str) -> str | None:
         return None
     name = tf.getFamilyName()
     return name or None
+
+
+def get_last_used_font_path() -> str:
+    return _LAST_USED_FONT_PATH
 
 
 def rotate_point(
@@ -320,7 +367,7 @@ def text_to_picture(
         font_families or SYSTEM_MONOSPACE_FONTS,
         font_style or skia.FontStyle.Normal(),
     )
-    para = make_simple_paragraph(para_style, text_style, text, layout=True)
+    para = make_simple_paragraph(para_style, text_style, font_families or SYSTEM_MONOSPACE_FONTS, text, layout=True)
 
     width = math.ceil(para.LongestLine) + padding * 2
     height = math.ceil(para.Height) + padding * 2

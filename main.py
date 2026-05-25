@@ -13,9 +13,17 @@ from .meme_stickers_core.sticker_pack.manager import StickerPackManager
 from .meme_stickers_core.draw.grid import draw_sticker_grid_from_packs, draw_sticker_grid_from_params
 from .meme_stickers_core.draw.pack_list import draw_sticker_pack_grid
 from .meme_stickers_core.draw.sticker import make_sticker_picture_from_params
-from .meme_stickers_core.draw.tools import IMAGE_FORMAT_MAP, make_surface_for_picture, save_image, TEXT_ALIGN_MAP, FONT_STYLE_FUNC_MAP
+from .meme_stickers_core.draw.tools import (
+    IMAGE_FORMAT_MAP,
+    make_surface_for_picture,
+    save_image,
+    TEXT_ALIGN_MAP,
+    FONT_STYLE_FUNC_MAP,
+    get_last_used_font_path,
+)
 from .meme_stickers_core.sticker_pack.hub import fetch_hub, fetch_hub_and_packs, fetch_checksum, temp_sticker_card_params
 from .meme_stickers_core.utils.file_source import create_req_sem
+from .meme_stickers_core.utils.file_source import FileSourceGitHubBranch, fetch_github_source
 
 HELP = """meme-stickers usage:
 /meme-stickers help
@@ -27,6 +35,8 @@ HELP = """meme-stickers usage:
 /meme-stickers delete <pack...>
 /meme-stickers enable <pack...>
 /meme-stickers disable <pack...>
+/meme-stickers debug-font <text>
+/meme-stickers fetch-emoji-font
 /pjsk
 /arc
 """.strip()
@@ -45,6 +55,7 @@ class SessionState:
 
 class MemeStickersPlugin(Star):
     SESSION_TIMEOUT_SECONDS = 180
+    EMOJI_FONT_NAME = "NotoColorEmoji.ttf"
 
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -60,11 +71,34 @@ class MemeStickersPlugin(Star):
 
     async def initialize(self):
         self.pack_manager.reload(clear_updating_flags=True)
+        await self._ensure_emoji_font()
         self._reload_bundled_fonts()
 
+    async def _ensure_emoji_font(self):
+        shared_dir = self.packs_dir / "_shared"
+        shared_dir.mkdir(parents=True, exist_ok=True)
+        target = shared_dir / self.EMOJI_FONT_NAME
+        if target.exists() and target.stat().st_size > 1024:
+            return
+        src = FileSourceGitHubBranch(
+            owner="googlefonts",
+            repo="noto-emoji",
+            branch="main",
+            path="fonts",
+        )
+        resp = await fetch_github_source(src, self.EMOJI_FONT_NAME)
+        target.write_bytes(resp.content)
+
     def _reload_bundled_fonts(self):
-        p = self.packs_dir / "_shared" / "YurukaFangTang.ttf"
-        self.bundled_fonts = [str(p)] if p.exists() else []
+        shared = self.packs_dir / "_shared"
+        primary = shared / "YurukaFangTang.ttf"
+        emoji = shared / self.EMOJI_FONT_NAME
+        found: list[str] = []
+        if primary.exists():
+            found.append(str(primary))
+        if emoji.exists():
+            found.append(str(emoji))
+        self.bundled_fonts = found
 
     def _sid(self, event: AstrMessageEvent) -> str:
         return f"{event.get_group_id()}:{event.get_sender_id()}"
@@ -178,12 +212,14 @@ class MemeStickersPlugin(Star):
 
         if sub == "reload":
             op = self.pack_manager.reload(clear_updating_flags=True)
+            await self._ensure_emoji_font()
             self._reload_bundled_fonts()
             yield event.plain_result(f"已重载，成功 {len(op.succeed)}，失败 {len(op.failed)}")
             return
 
         if sub == "update":
             op, _ = await self.pack_manager.update_all(force=False)
+            await self._ensure_emoji_font()
             self._reload_bundled_fonts()
             yield event.plain_result(f"更新完成：成功 {len(op.succeed)}，跳过 {len(op.skipped)}，失败 {len(op.failed)}")
             return
@@ -199,8 +235,44 @@ class MemeStickersPlugin(Star):
                 yield event.plain_result("未找到可安装的贴纸包")
                 return
             op, _ = await self.pack_manager.install(infos)
+            await self._ensure_emoji_font()
             self._reload_bundled_fonts()
-            yield event.plain_result(f"安装完成：成功 {len(op.succeed)}，失败 {len(op.failed)}")
+            yield event.plain_result(f"安装完成：成功 {len(op.succeed)}，跳过 {len(op.skipped)}，失败 {len(op.failed)}")
+            return
+
+        if sub == "debug-font":
+            text = " ".join(args[1:]).strip() if len(args) > 1 else "Font Debug 123"
+            packs = self.pack_manager.available_packs
+            if not packs:
+                yield event.plain_result("当前无可用贴纸包")
+                return
+            pack = packs[0]
+            sticker = pack.manifest.resolved_sample_sticker
+            params = sticker.model_copy(deep=True)
+            params.text = text
+            params.font_families = [*self.bundled_fonts, *params.font_families]
+            pic = make_sticker_picture_from_params(pack.base_path, params, auto_resize=True)
+            img = save_image(make_surface_for_picture(pic, None), skia.kJPEG)
+            async for r in self._send_image(event, img, "debug_font"):
+                yield r
+            attempted = self.bundled_fonts[0] if self.bundled_fonts else "(none)"
+            # Current rendering path in sticker.py uses direct Typeface.MakeFromFile.
+            actual = attempted if attempted != "(none)" else "(fallback/system)"
+            yield event.plain_result(
+                "debug-font result:\\n"
+                f"attempted_font_path: {attempted}\\n"
+                f"actual_used_font_path: {actual}\\n"
+                f"emoji_font_path: {self.packs_dir / '_shared' / self.EMOJI_FONT_NAME}"
+            )
+            return
+
+        if sub == "fetch-emoji-font":
+            await self._ensure_emoji_font()
+            self._reload_bundled_fonts()
+            p = self.packs_dir / "_shared" / self.EMOJI_FONT_NAME
+            yield event.plain_result(
+                f"emoji font fetched: {p}\\nexists={p.exists()} size={p.stat().st_size if p.exists() else 0}"
+            )
             return
 
         if sub in {"delete", "enable", "disable"}:
