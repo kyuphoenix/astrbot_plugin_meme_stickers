@@ -150,6 +150,8 @@ class MemeStickersPlugin(Star):
             pack.manifest.resolved_stickers_by_category[c][0].params.model_copy(update={"text": f"{i}. {c}"})
             for i, c in enumerate(categories, 1)
         ]
+        for s in sample:
+            s.font_families = [*self.bundled_fonts, *s.font_families]
         img = save_image(
             draw_sticker_grid_from_params(pack.manifest.sticker_grid.resolved_category_params, sample, pack.base_path),
             skia.kJPEG,

@@ -109,6 +109,16 @@ def make_text_style(
     style.setForegroundPaint(paint)
     path_fonts = [x for x in font_families if Path(x).exists()]
     name_fonts = [x for x in font_families if not Path(x).exists()]
+    # Prefer explicit font files from plugin data dir over system fonts.
+    if path_fonts and hasattr(style, "setTypeface"):
+        for fp in path_fonts:
+            tf = skia.Typeface.MakeFromFile(fp)
+            if tf:
+                try:
+                    style.setTypeface(tf)
+                    break
+                except Exception:
+                    pass
     resolved_families = list(name_fonts)
     if path_fonts:
         # Resolve font family names from file paths for skia builds
