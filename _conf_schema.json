@@ -1,23 +1,23 @@
 {
   "quote_reply": {
-    "description": "Quote the trigger message in replies",
+    "description": "是否引用触发消息",
     "type": "bool",
     "default": true
   },
   "interactive_preview_image_format": {
-    "description": "Image format used during interactive preview",
+    "description": "交互生成过程中图片格式",
     "type": "string",
     "default": "jpeg",
     "options": ["png", "jpeg", "webp"]
   },
   "final_sticker_image_format": {
-    "description": "Image format used for final sticker output",
+    "description": "最终生成贴纸格式",
     "type": "string",
     "default": "png",
     "options": ["png", "jpeg", "webp"]
   },
   "non_png_quality": {
-    "description": "Quality for non-PNG output",
+    "description": "非 PNG 格式图片质量",
     "type": "int",
     "default": 95,
     "slider": {
@@ -27,32 +27,32 @@
     }
   },
   "proxy": {
-    "description": "HTTP proxy for network requests",
+    "description": "网络请求代理地址",
     "type": "string",
     "default": ""
   },
   "github_url_template": {
-    "description": "Template for downloading from GitHub Raw",
+    "description": "GitHub Raw 下载地址模板",
     "type": "string",
     "default": "https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}"
   },
   "hub_manifest_url": {
-    "description": "Hub manifest URL",
+    "description": "贴纸 Hub 清单地址",
     "type": "string",
     "default": "https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json"
   },
   "retry_times": {
-    "description": "Request retry times",
+    "description": "请求重试次数",
     "type": "int",
     "default": 3
   },
   "req_concurrency": {
-    "description": "Request concurrency",
+    "description": "并发请求数量",
     "type": "int",
     "default": 8
   },
   "req_timeout": {
-    "description": "Request timeout in seconds",
+    "description": "请求超时时间（秒）",
     "type": "int",
     "default": 5
   }
