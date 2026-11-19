@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meme Stickers Playground</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <span class="brand-icon">🎨</span>
+        <div>
+          <h1 class="brand-title">Meme Stickers 表情包游乐场</h1>
+          <p class="brand-sub">可视化资源拉取与交互式贴纸生成工作台</p>
+        </div>
+      </div>
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="tab-playground">🎨 贴纸工坊</button>
+        <button class="nav-tab" data-tab="tab-resources">📦 资源管理</button>
+        <button class="nav-tab" data-tab="tab-mirrors">⚙️ 镜像与调试</button>
+      </nav>
+    </header>
+
+    <!-- Tab 1: Playground -->
+    <main id="tab-playground" class="tab-content active">
+      <div class="playground-grid">
+        <!-- Controls Column -->
+        <div class="controls-panel">
+          <div class="card">
+            <h2 class="card-title"><span>🏷️</span> 贴纸选择</h2>
+            <div class="form-group">
+              <label class="form-label" for="pack-select">贴纸包</label>
+              <select id="pack-select" class="form-select">
+                <option value="">正在加载已安装贴纸包...</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="category-select">分类 / 角色</label>
+                <select id="category-select" class="form-select" disabled>
+                  <option value="">请先选择贴纸包</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="sticker-select">贴纸名称</label>
+                <select id="sticker-select" class="form-select" disabled>
+                  <option value="">请选择贴纸</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-title"><span>✍️</span> 文字与排版配置</h2>
+            <div class="form-group">
+              <label class="form-label" for="text-input">
+                <span>贴纸文字</span>
+                <span style="font-size: 11px;">(Ctrl + Enter 快速生成)</span>
+              </label>
+              <textarea id="text-input" class="form-control" rows="2" placeholder="在此输入要绘制在表情包上的文字，支持 Emoji 如 🎉✨..."></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="font-size-input">字号大小</label>
+                <div class="range-wrap">
+                  <input type="range" id="font-size-range" class="range-input" min="10" max="120" value="48" />
+                  <span id="font-size-val" class="range-val">48px</span>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="text-align-select">对齐方式</label>
+                <select id="text-align-select" class="form-select">
+                  <option value="center" selected>居中 (Center)</option>
+                  <option value="left">靠左 (Left)</option>
+                  <option value="right">靠右 (Right)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">文字颜色</label>
+                <div class="color-picker-wrap">
+                  <input type="color" id="text-color-picker" class="color-input" value="#1a1a1a" />
+                  <input type="text" id="text-color-hex" class="form-control" value="#1a1a1a" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">描边颜色</label>
+                <div class="color-picker-wrap">
+                  <input type="color" id="stroke-color-picker" class="color-input" value="#ffffff" />
+                  <input type="text" id="stroke-color-hex" class="form-control" value="#ffffff" />
+                </div>
+              </div>
+            </div>
+
+            <details class="advanced-box">
+              <summary>🛠️ 高级参数微调 (坐标、旋转、描边与格式)</summary>
+              <div style="margin-top: 12px;">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="text-x-input">X 坐标 (px)</label>
+                    <input type="number" id="text-x-input" class="form-control" placeholder="留空默认" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="text-y-input">Y 坐标 (px)</label>
+                    <input type="number" id="text-y-input" class="form-control" placeholder="留空默认" />
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="rotate-range">旋转角度</label>
+                    <div class="range-wrap">
+                      <input type="range" id="rotate-range" class="range-input" min="-180" max="180" value="0" />
+                      <span id="rotate-val" class="range-val">0°</span>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="stroke-width-range">描边宽度比例</label>
+                    <div class="range-wrap">
+                      <input type="range" id="stroke-width-range" class="range-input" min="0" max="0.3" step="0.01" value="0.08" />
+                      <span id="stroke-width-val" class="range-val">0.08</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="font-style-select">字体字重</label>
+                    <select id="font-style-select" class="form-select">
+                      <option value="normal" selected>常规 (Normal)</option>
+                      <option value="bold">粗体 (Bold)</option>
+                      <option value="italic">斜体 (Italic)</option>
+                      <option value="bold_italic">粗斜体 (Bold Italic)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="image-format-select">输出格式</label>
+                    <select id="image-format-select" class="form-select">
+                      <option value="png" selected>PNG (透明度支持)</option>
+                      <option value="jpeg">JPEG (带背景)</option>
+                      <option value="webp">WebP</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-row" style="margin-top: 6px;">
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); cursor: pointer;">
+                    <input type="checkbox" id="auto-resize-check" checked /> 自动缩放自适应尺寸
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); cursor: pointer;">
+                    <input type="checkbox" id="debug-check" /> 绘制调试边界红框
+                  </label>
+                </div>
+              </div>
+            </details>
+
+            <div style="margin-top: 18px;">
+              <button id="btn-generate" class="btn btn-primary">
+                <span>🎨 立即生成表情包</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview Column -->
+        <div class="preview-panel">
+          <div class="card" style="flex: 1; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+              <h2 class="card-title" style="margin: 0;"><span>🖼️</span> 渲染预览画布</h2>
+              <div id="render-time-badge" class="badge">就绪</div>
+            </div>
+
+            <div class="preview-canvas-container" id="preview-container">
+              <div id="placeholder-box" class="preview-placeholder">
+                <p style="font-size: 32px; margin-bottom: 8px;">📷</p>
+                <p>请在左侧选择贴纸并输入文字后，点击“立即生成”进行预览</p>
+              </div>
+              <img id="preview-image" class="preview-img" style="display: none;" alt="Preview" />
+            </div>
+
+            <div class="meta-tags" id="meta-tags-box" style="display: none;">
+              <span id="badge-pack" class="badge"></span>
+              <span id="badge-size" class="badge"></span>
+              <span id="badge-filesize" class="badge"></span>
+            </div>
+
+            <div class="preview-actions">
+              <button id="btn-download" class="btn btn-secondary" style="flex: 1;" disabled>
+                <span>💾 下载图片</span>
+              </button>
+              <button id="btn-copy" class="btn btn-secondary" style="flex: 1;" disabled>
+                <span>📋 复制到剪贴板</span>
+              </button>
+              <button id="btn-reset" class="btn btn-secondary" title="重置参数为贴纸默认值">
+                <span>🔄 恢复默认</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Tab 2: Resources -->
+    <main id="tab-resources" class="tab-content">
+      <!-- Font Status Overview -->
+      <div class="card">
+        <h2 class="card-title"><span>🔤</span> 核心字体资源状态</h2>
+        <div class="resource-status-bar">
+          <div class="status-card">
+            <div class="status-card-header">
+              <span class="status-title">NotoColorEmoji.ttf</span>
+              <span id="emoji-status-badge" class="badge">检测中...</span>
+            </div>
+            <p id="emoji-status-desc" class="status-desc">Emoji 彩色表情渲染字体</p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <select id="emoji-font-source-select" class="form-select" style="flex: 1; min-width: 200px;">
+                <option value="https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf">jsDelivr CDN (推荐秒下)</option>
+                <option value="https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf">GitHub 官方源</option>
+                <option value="https://ghfast.top/https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf">ghfast 加速镜像</option>
+                <option value="https://gh-proxy.com/https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf">gh-proxy 镜像</option>
+              </select>
+              <button id="btn-pull-emoji-font" class="btn btn-secondary btn-sm">
+                <span>⬇️ 重新拉取字体</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="status-card">
+            <div class="status-card-header">
+              <span class="status-title">YurukaFangTang.ttf</span>
+              <span id="primary-status-badge" class="badge">检测中...</span>
+            </div>
+            <p id="primary-status-desc" class="status-desc">基础中日文字体（随 PJSK 贴纸包自动安装）</p>
+            <div style="font-size: 12px; color: var(--text-muted);">
+              安装 pjsk 贴纸包时会自动从 Hub 补全此字体。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sticker Packs Management -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+          <h2 class="card-title" style="margin: 0;"><span>📦</span> 贴纸包管理 (本地与在线 Hub)</h2>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-reload-packs" class="btn btn-secondary btn-sm">🔄 重载本地索引</button>
+            <button id="btn-install-all-hub" class="btn btn-secondary btn-sm">⬇️ 一键安装全部在线贴纸包</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>标识 (Slug)</th>
+                <th>名称</th>
+                <th>状态</th>
+                <th>贴纸数量</th>
+                <th>分类列表</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="packs-table-body">
+              <tr>
+                <td colspan="6" style="text-align: center; color: var(--text-muted);">正在加载贴纸包数据...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Action Log Console -->
+      <div class="card">
+        <h2 class="card-title"><span>📋</span> 控制台日志输出</h2>
+        <div id="log-console" class="console-box">[Ready] 页面已加载，等待操作...</div>
+      </div>
+    </main>
+
+    <!-- Tab 3: Mirrors & Settings -->
+    <main id="tab-mirrors" class="tab-content">
+      <div class="card">
+        <h2 class="card-title"><span>🌐</span> 镜像加速配置与切换</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+          国内 Docker 容器网络若无法直连 GitHub，可在此一键切换预设镜像，即时应用于后续贴纸包安装与字体拉取。
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">快速预设镜像切换</label>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm btn-mirror" data-preset="jsdelivr_mixed">🚀 混合加速 (jsDelivr+官方)</button>
+            <button class="btn btn-secondary btn-sm btn-mirror" data-preset="ghfast">⚡ ghfast 镜像</button>
+            <button class="btn btn-secondary btn-sm btn-mirror" data-preset="ghproxy">🔌 gh-proxy 镜像</button>
+            <button class="btn btn-secondary btn-sm btn-mirror" data-preset="gitmirror">🪞 GitMirror 镜像</button>
+            <button class="btn btn-secondary btn-sm btn-mirror" data-preset="official">🌍 官方直连 (需代理)</button>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px;">
+          <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">当前生效配置详情</h3>
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr>
+                  <td style="width: 220px; font-weight: 600;">当前预设 (mirror_preset)</td>
+                  <td id="cfg-mirror-preset">-</td>
+                </tr>
+                <tr>
+                  <td style="font-weight: 600;">Emoji 字体下载直链</td>
+                  <td id="cfg-emoji-font-url">-</td>
+                </tr>
+                <tr>
+                  <td style="font-weight: 600;">贴纸 Hub 清单地址</td>
+                  <td id="cfg-hub-manifest-url">-</td>
+                </tr>
+                <tr>
+                  <td style="font-weight: 600;">贴纸资源模板 (github_url_template)</td>
+                  <td id="cfg-github-url-template">-</td>
+                </tr>
+                <tr>
+                  <td style="font-weight: 600;">网络代理 (proxy)</td>
+                  <td id="cfg-proxy">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

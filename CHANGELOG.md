@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.0
+
+- 新增 AstrBot 官方规范的可视化插件页面（Plugin Page / View: `playground`）：
+  - **交互式表情包生成（Playground）**：支持在 WebUI 中可视化联动选择贴纸包、角色/分类、具体贴纸；支持实时调节文字、字号、对齐、颜色、描边、坐标偏移、旋转角度、自动缩放等参数并即时渲染预览；支持一键复制图片与下载保存。
+  - **可视化资源管理（Resource Manager）**：直观查看核心字体（Emoji 字体、YurukaFangTang 共享字体）本地状态与体积；支持选择指定镜像源一键拉取 Emoji 字体；可视化查看本地已安装与在线 Hub 贴纸包列表并支持一键安装/更新/重载。
+  - **镜像与调试面板（Mirrors & Debug）**：一键切换国内主流镜像源预设，实时查看配置生效状态与操作日志。
+- 后端配套注册标准化 Web API（基于 `context.register_web_api` 与 `astrbot.api.web`）。
+- 前端集成 AstrBot Bridge SDK（`window.AstrBotPluginView` / `AstrBotPluginPage`），并支持独立调试自动降级。
+
 ## v0.1.2
 
 - 配置文件与面板预置多个镜像源选项：

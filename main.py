@@ -2,6 +2,12 @@ from dataclasses import dataclass
 from pathlib import Path
 import tempfile
 import asyncio
+import base64
+
+try:
+    from astrbot.api.web import request, json_response, error_response
+except ImportError:
+    request, json_response, error_response = None, None, None
 
 import skia
 import astrbot.api.message_components as Comp
@@ -77,6 +83,8 @@ class MemeStickersPlugin(Star):
         self.pack_manager = StickerPackManager(self.packs_dir)
         self.sessions: dict[str, SessionState] = {}
         self.bundled_fonts: list[str] = []
+        self.PLUGIN_NAME = "astrbot_plugin_meme_stickers"
+        self._register_web_apis()
 
     async def initialize(self):
         self.pack_manager.reload(clear_updating_flags=True)
@@ -98,7 +106,7 @@ class MemeStickersPlugin(Star):
                 "可在检查网络或配置代理后使用 /meme-stickers fetch-emoji-font 手动下载。"
             )
 
-    async def _ensure_emoji_font(self, force: bool = False):
+    async def _ensure_emoji_font(self, force: bool = False, custom_url: str | None = None):
         shared_dir = self.packs_dir / "_shared"
         shared_dir.mkdir(parents=True, exist_ok=True)
         target = shared_dir / self.EMOJI_FONT_NAME
@@ -106,6 +114,8 @@ class MemeStickersPlugin(Star):
             return
 
         urls_to_try: list[str] = []
+        if custom_url:
+            urls_to_try.append(custom_url)
         if getattr(ms_config, "emoji_font_url", None):
             urls_to_try.append(ms_config.emoji_font_url)
 
@@ -677,3 +687,282 @@ class MemeStickersPlugin(Star):
                 self.sessions.pop(sid, None)
 
 
+
+    def _register_web_apis(self):
+        if not hasattr(self.context, "register_web_api"):
+            return
+        apis = [
+            (f"/{self.PLUGIN_NAME}/status", self.web_get_status, ["GET"], "获取插件与字体状态"),
+            (f"/{self.PLUGIN_NAME}/hub", self.web_get_hub, ["GET"], "获取在线Hub贴纸包"),
+            (f"/{self.PLUGIN_NAME}/packs", self.web_get_packs_detail, ["GET"], "获取已安装贴纸包详情树"),
+            (f"/{self.PLUGIN_NAME}/install", self.web_install_pack, ["POST"], "安装贴纸包"),
+            (f"/{self.PLUGIN_NAME}/reload", self.web_reload_packs, ["POST"], "重载贴纸包"),
+            (f"/{self.PLUGIN_NAME}/fetch_emoji_font", self.web_fetch_emoji_font, ["POST"], "拉取Emoji字体"),
+            (f"/{self.PLUGIN_NAME}/generate", self.web_generate, ["POST"], "Playground生成贴纸图片"),
+            (f"/{self.PLUGIN_NAME}/switch_mirror", self.web_switch_mirror, ["POST"], "切换镜像源预设"),
+        ]
+        for route, handler, methods, desc in apis:
+            try:
+                self.context.register_web_api(route, handler, methods, desc)
+            except Exception as e:
+                logger.warning(f"注册 Web API {route} 失败: {e}")
+
+    @staticmethod
+    def _safe_color_parse(c):
+        if isinstance(c, (list, tuple)) and len(c) in (3, 4):
+            r, g, b = int(c[0]), int(c[1]), int(c[2])
+            a = int(c[3]) if len(c) == 4 else 255
+            return (r, g, b, a)
+        return resolve_color_to_tuple(str(c))
+
+    async def web_get_status(self):
+        shared_dir = self.packs_dir / "_shared"
+        emoji_p = shared_dir / self.EMOJI_FONT_NAME
+        primary_p = shared_dir / "YurukaFangTang.ttf"
+        
+        packs_data = []
+        for p in self.pack_manager.packs:
+            packs_data.append({
+                "slug": p.slug,
+                "name": p.manifest.name if p.manifest else p.slug,
+                "author": p.manifest.author if p.manifest else "",
+                "description": p.manifest.description if p.manifest else "",
+                "version": p.manifest.version if p.manifest else "",
+                "stickers_count": len(p.manifest.stickers) if p.manifest else 0,
+                "categories": list(p.manifest.resolved_stickers_by_category.keys()) if p.manifest else [],
+                "disabled": p.config.disabled,
+                "unavailable": p.unavailable,
+            })
+            
+        return json_response({
+            "status": "ok",
+            "data": {
+                "installed_packs": packs_data,
+                "total_packs": len(packs_data),
+                "available_packs_count": len(self.pack_manager.available_packs),
+                "emoji_font": {
+                    "name": self.EMOJI_FONT_NAME,
+                    "exists": emoji_p.exists(),
+                    "size": emoji_p.stat().st_size if emoji_p.exists() else 0,
+                    "size_mb": round(emoji_p.stat().st_size / (1024 * 1024), 2) if emoji_p.exists() else 0,
+                    "path": str(emoji_p),
+                },
+                "primary_font": {
+                    "name": "YurukaFangTang.ttf",
+                    "exists": primary_p.exists(),
+                    "size": primary_p.stat().st_size if primary_p.exists() else 0,
+                    "path": str(primary_p),
+                },
+                "config": {
+                    "mirror_preset": getattr(ms_config, "mirror_preset", "jsdelivr_mixed"),
+                    "emoji_font_url": getattr(ms_config, "emoji_font_url", ""),
+                    "hub_manifest_url": getattr(ms_config, "hub_manifest_url", ""),
+                    "github_url_template": getattr(ms_config, "github_url_template", ""),
+                    "proxy": getattr(ms_config, "proxy", ""),
+                },
+                "bundled_fonts": self.bundled_fonts,
+            }
+        })
+
+    async def web_get_hub(self):
+        try:
+            hub = await fetch_hub()
+            installed_slugs = {p.slug for p in self.pack_manager.packs}
+            items = []
+            for h in hub:
+                items.append({
+                    "slug": h.slug,
+                    "installed": h.slug in installed_slugs,
+                    "source": h.source.model_dump() if hasattr(h.source, "model_dump") else str(h.source),
+                })
+            return json_response({"status": "ok", "data": items})
+        except Exception as e:
+            return error_response(f"获取在线 Hub 列表失败: {e}", status_code=500)
+
+    async def web_install_pack(self):
+        try:
+            body = await request.get_json() if request else {}
+            slugs = body.get("slugs", [])
+            install_all = body.get("all", False)
+            hub = await fetch_hub()
+            if install_all:
+                infos = list(hub)
+            else:
+                infos = [x for x in hub if x.slug in slugs]
+            if not infos:
+                return error_response("未匹配到可安装的贴纸包", status_code=400)
+            
+            op, _ = await self.pack_manager.install(infos)
+            try:
+                await self._ensure_emoji_font()
+            except Exception as e:
+                logger.warning(f"安装贴纸包后检查 Emoji 字体失败: {e}")
+            self._reload_bundled_fonts()
+            return json_response({
+                "status": "ok",
+                "data": {
+                    "succeed": [str(x) for x in op.succeed],
+                    "failed": [f"{x.target}: {x.exc}" for x in op.failed],
+                    "skipped": [str(x) for x in op.skipped],
+                }
+            })
+        except Exception as e:
+            return error_response(f"安装贴纸包出错: {e}", status_code=500)
+
+    async def web_reload_packs(self):
+        try:
+            op = self.pack_manager.reload(clear_updating_flags=True)
+            try:
+                await self._ensure_emoji_font()
+            except Exception as e:
+                logger.warning(f"重载时检查 Emoji 字体失败: {e}")
+            self._reload_bundled_fonts()
+            return json_response({
+                "status": "ok",
+                "data": {
+                    "succeed": len(op.succeed),
+                    "failed": len(op.failed),
+                    "total": len(self.pack_manager.packs),
+                }
+            })
+        except Exception as e:
+            return error_response(f"重载失败: {e}", status_code=500)
+
+    async def web_fetch_emoji_font(self):
+        try:
+            body = await request.get_json() if request else {}
+            force = body.get("force", True)
+            custom_url = body.get("url")
+            await self._ensure_emoji_font(force=force, custom_url=custom_url)
+            self._reload_bundled_fonts()
+            p = self.packs_dir / "_shared" / self.EMOJI_FONT_NAME
+            return json_response({
+                "status": "ok",
+                "data": {
+                    "path": str(p),
+                    "exists": p.exists(),
+                    "size": p.stat().st_size if p.exists() else 0,
+                    "size_mb": round(p.stat().st_size / (1024 * 1024), 2) if p.exists() else 0,
+                }
+            })
+        except Exception as e:
+            return error_response(f"下载 Emoji 字体失败: {e}", status_code=500)
+
+    async def web_get_packs_detail(self):
+        packs_tree = {}
+        for pack in self.pack_manager.available_packs:
+            if not pack.manifest:
+                continue
+            cat_dict = {}
+            for cat_name, stickers in pack.manifest.resolved_stickers_by_category.items():
+                cat_dict[cat_name] = [
+                    {
+                        "name": s.name,
+                        "text": s.params.text,
+                        "width": s.params.width,
+                        "height": s.params.height,
+                        "text_x": s.params.text_x,
+                        "text_y": s.params.text_y,
+                        "text_align": s.params.text_align,
+                        "text_rotate_degrees": s.params.text_rotate_degrees,
+                        "text_color": [s.params.text_color[0], s.params.text_color[1], s.params.text_color[2], s.params.text_color[3]],
+                        "stroke_color": [s.params.stroke_color[0], s.params.stroke_color[1], s.params.stroke_color[2], s.params.stroke_color[3]],
+                        "stroke_width_factor": s.params.stroke_width_factor,
+                        "font_size": s.params.font_size,
+                        "font_style": s.params.font_style,
+                    }
+                    for s in stickers
+                ]
+            packs_tree[pack.slug] = {
+                "name": pack.manifest.name,
+                "categories": cat_dict,
+            }
+        return json_response({"status": "ok", "data": packs_tree})
+
+    async def web_generate(self):
+        try:
+            body = await request.get_json() if request else {}
+            pack_slug = body.get("pack_slug")
+            sticker_name = body.get("sticker_name")
+            text = body.get("text", "")
+            
+            pack = self.pack_manager.find_pack(pack_slug)
+            if not pack or pack.unavailable or not pack.manifest:
+                return error_response(f"贴纸包不可用或未找到: {pack_slug}", status_code=404)
+            sticker = pack.manifest.find_sticker_by_name(sticker_name)
+            if not sticker:
+                return error_response(f"贴纸未找到: {sticker_name}", status_code=404)
+                
+            params = sticker.params.model_copy(deep=True)
+            params.text = text if text != "" else sticker.params.text
+            params.font_families = [*self.bundled_fonts, *params.font_families]
+            
+            if "text_x" in body and body["text_x"] is not None:
+                params.text_x = float(body["text_x"])
+            if "text_y" in body and body["text_y"] is not None:
+                params.text_y = float(body["text_y"])
+            if "text_align" in body and body["text_align"] in TEXT_ALIGN_MAP:
+                params.text_align = body["text_align"]
+            if "text_rotate_degrees" in body and body["text_rotate_degrees"] is not None:
+                params.text_rotate_degrees = float(body["text_rotate_degrees"])
+            if "text_color" in body and body["text_color"]:
+                params.text_color = self._safe_color_parse(body["text_color"])
+            if "stroke_color" in body and body["stroke_color"]:
+                params.stroke_color = self._safe_color_parse(body["stroke_color"])
+            if "stroke_width_factor" in body and body["stroke_width_factor"] is not None:
+                params.stroke_width_factor = float(body["stroke_width_factor"])
+            if "font_size" in body and body["font_size"] is not None:
+                params.font_size = float(body["font_size"])
+            if "font_style" in body and body["font_style"] in FONT_STYLE_FUNC_MAP:
+                params.font_style = body["font_style"]
+                
+            auto_resize = body.get("auto_resize", True)
+            debug = body.get("debug", False)
+            image_format = body.get("image_format", "png")
+            bg = None
+            if image_format == "jpeg":
+                bv = body.get("background")
+                bg = skia.Color(*self._safe_color_parse(bv)) if bv else ms_config.default_sticker_background
+
+            pic = make_sticker_picture_from_params(pack.base_path, params, auto_resize=auto_resize, debug=debug)
+            img_bytes = save_image(
+                make_surface_for_picture(pic, bg),
+                IMAGE_FORMAT_MAP.get(image_format, skia.kPNG),
+                quality=ms_config.non_png_quality if image_format != "png" else 100,
+            )
+            
+            img_b64 = base64.b64encode(img_bytes).decode("ascii")
+            mime = f"image/{image_format if image_format != 'jpeg' else 'jpeg'}"
+            data_uri = f"data:{mime};base64,{img_b64}"
+            
+            return json_response({
+                "status": "ok",
+                "data": {
+                    "data_uri": data_uri,
+                    "width": params.width,
+                    "height": params.height,
+                    "format": image_format,
+                    "size_bytes": len(img_bytes),
+                }
+            })
+        except Exception as e:
+            return error_response(f"生成表情包失败: {e}", status_code=500)
+
+    async def web_switch_mirror(self):
+        try:
+            body = await request.get_json() if request else {}
+            preset = body.get("preset")
+            if not preset:
+                return error_response("缺少 preset 参数", status_code=400)
+            update_config({"mirror_preset": preset})
+            return json_response({
+                "status": "ok",
+                "data": {
+                    "mirror_preset": ms_config.mirror_preset,
+                    "emoji_font_url": ms_config.emoji_font_url,
+                    "hub_manifest_url": ms_config.hub_manifest_url,
+                    "github_url_template": ms_config.github_url_template,
+                }
+            })
+        except Exception as e:
+            return error_response(f"切换镜像源失败: {e}", status_code=500)

@@ -8,10 +8,23 @@
 - AstrBot 显示名：`Arc/pjsk表情包制作`
 - GitHub 仓库：[`kyuphoenix/astrbot_plugin_meme_stickers`](https://github.com/kyuphoenix/astrbot_plugin_meme_stickers)
 - 主要能力：
+  - **全新可视化 WebUI 插件页面 (Playground / 表情包游乐场)**
   - 查看本地与在线贴纸包列表
   - 在线安装、更新、启用、禁用、删除贴纸包
   - 交互式制作 pjsk / arcaea 贴纸
   - 直接按指定贴纸生成表情包
+  - 内置国内加速镜像源与自动 Fallback
+
+## 插件可视化页面 (Playground)
+
+本插件依据 [AstrBot Plugin Pages / Views 规范](https://docs.astrbot.app/dev/star/guides/plugin-pages.html) 提供了内置的 WebUI 可视化页面：
+
+1. 打开 AstrBot 管理面板，进入 **扩展 → 插件**；
+2. 找到本插件卡片，点击进入插件详情，即可看到 **表情包游乐场 (Playground)** 视图入口；
+3. **主要功能**：
+   - 🎨 **贴纸工坊**：在网页端联动选择贴纸包、角色和具体表情，实时编辑文字、字号、颜色、描边、坐标并即时渲染预览，支持直接复制或下载生成的表情包。
+   - 📦 **资源管理**：一键查看 Emoji 字体与共享字体状态，支持下拉选择镜像一键拉取；查看在线 Hub 贴纸包列表并支持一键下载安装与更新。
+   - ⚙️ **镜像与环境**：实时切换预设镜像源并查看生效配置。
 
 <details>
 <summary><strong>安装失败必看！！！</strong></summary>
