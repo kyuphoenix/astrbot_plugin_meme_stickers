@@ -35,20 +35,32 @@ def _is_emoji_control(ch: str) -> bool:
 def _pick_typeface_from_paths(font_families: list[str]) -> skia.Typeface:
     for x in font_families:
         p = Path(x)
-        if p.exists():
+        if p.exists() and p.is_file():
             tf = skia.Typeface.MakeFromFile(str(p))
             if tf:
                 return tf
+    for x in font_families:
+        if not Path(x).is_file():
+            tf = skia.Typeface.MakeFromName(x, skia.FontStyle.Normal())
+            if tf:
+                return tf
+    tf = skia.Typeface.MakeDefault()
+    if tf:
+        return tf
     raise RuntimeError("No valid font file found in font_families")
 
 
 def _pick_emoji_typeface(custom_tf: skia.Typeface, font_families: list[str]) -> skia.Typeface:
     for x in font_families:
         p = Path(x)
-        if p.name.lower() == "notocoloremoji.ttf" and p.exists():
+        if p.name.lower() in {"notocoloremoji.ttf", "notocoloremoji-regular.ttf"} and p.exists():
             tf = skia.Typeface.MakeFromFile(str(p))
             if tf:
                 return tf
+    for name in ["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"]:
+        tf = skia.Typeface.MakeFromName(name, skia.FontStyle.Normal())
+        if tf and tf.getFamilyName() and tf.getFamilyName().lower() in {name.lower(), "emoji"}:
+            return tf
     return custom_tf
 
 

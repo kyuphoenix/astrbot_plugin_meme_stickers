@@ -23,8 +23,16 @@ from .meme_stickers_core.draw.tools import (
     get_last_used_font_path,
 )
 from .meme_stickers_core.sticker_pack.hub import fetch_hub, fetch_hub_and_packs, fetch_checksum, temp_sticker_card_params
-from .meme_stickers_core.utils.file_source import create_req_sem
-from .meme_stickers_core.utils.file_source import FileSourceGitHubBranch, fetch_github_source
+from astrbot.api import logger
+from .meme_stickers_core.utils.file_source import (
+    create_req_sem,
+    create_client,
+    FileSourceGitHubBranch,
+    FileSourceGitHubTag,
+    FileSourceURL,
+    fetch_github_source,
+    fetch_url_source,
+)
 
 HELP = """meme-stickers usage:
 /meme-stickers help
@@ -72,23 +80,54 @@ class MemeStickersPlugin(Star):
 
     async def initialize(self):
         self.pack_manager.reload(clear_updating_flags=True)
-        await self._ensure_emoji_font()
         self._reload_bundled_fonts()
+        shared_dir = self.packs_dir / "_shared"
+        target = shared_dir / self.EMOJI_FONT_NAME
+        if not (target.exists() and target.stat().st_size > 1024 * 1024):
+            asyncio.create_task(self._background_ensure_emoji_font())
 
-    async def _ensure_emoji_font(self):
+    async def _background_ensure_emoji_font(self):
+        try:
+            logger.info("Emoji 字体未找到，正在后台尝试拉取 (NotoColorEmoji.ttf)...")
+            await self._ensure_emoji_font()
+            self._reload_bundled_fonts()
+            logger.info("Emoji 字体已成功下载并加载")
+        except Exception as e:
+            logger.warning(
+                f"自动拉取 Emoji 字体失败: {e}。这不影响基础贴纸功能，"
+                "可在检查网络或配置代理后使用 /meme-stickers fetch-emoji-font 手动下载。"
+            )
+
+    async def _ensure_emoji_font(self, force: bool = False):
         shared_dir = self.packs_dir / "_shared"
         shared_dir.mkdir(parents=True, exist_ok=True)
         target = shared_dir / self.EMOJI_FONT_NAME
-        if target.exists() and target.stat().st_size > 1024:
+        if not force and target.exists() and target.stat().st_size > 1024 * 1024:
             return
-        src = FileSourceGitHubBranch(
+
+        src = FileSourceGitHubTag(
             owner="googlefonts",
             repo="noto-emoji",
-            branch="main",
+            tag="v2020-09-16-unicode13_1",
             path="fonts",
         )
-        resp = await fetch_github_source(src, self.EMOJI_FONT_NAME)
-        target.write_bytes(resp.content)
+        tmp_target = shared_dir / f"{self.EMOJI_FONT_NAME}.tmp"
+        try:
+            async with create_client(timeout=60) as cli:
+                try:
+                    resp = await fetch_github_source(src, self.EMOJI_FONT_NAME, cli=cli)
+                except Exception:
+                    fallback_url = "https://raw.githubusercontent.com/googlefonts/noto-emoji/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf"
+                    resp = await fetch_url_source(FileSourceURL(type="url", url=fallback_url), cli=cli)
+
+            if len(resp.content) < 1024 * 1024:
+                raise ValueError(f"下载文件过小 ({len(resp.content)} bytes)，可能不完整")
+
+            tmp_target.write_bytes(resp.content)
+            tmp_target.replace(target)
+        except Exception:
+            tmp_target.unlink(missing_ok=True)
+            raise
 
     def _reload_bundled_fonts(self):
         shared = self.packs_dir / "_shared"
@@ -252,14 +291,20 @@ class MemeStickersPlugin(Star):
 
         if sub == "reload":
             op = self.pack_manager.reload(clear_updating_flags=True)
-            await self._ensure_emoji_font()
+            try:
+                await self._ensure_emoji_font()
+            except Exception as e:
+                logger.warning(f"重载时检查 Emoji 字体失败: {e}")
             self._reload_bundled_fonts()
             yield self._plain(event, f"已重载，成功 {len(op.succeed)}，失败 {len(op.failed)}")
             return
 
         if sub == "update":
             op, _ = await self.pack_manager.update_all(force=False)
-            await self._ensure_emoji_font()
+            try:
+                await self._ensure_emoji_font()
+            except Exception as e:
+                logger.warning(f"更新时检查 Emoji 字体失败: {e}")
             self._reload_bundled_fonts()
             yield self._plain(event, f"更新完成：成功 {len(op.succeed)}，跳过 {len(op.skipped)}，失败 {len(op.failed)}")
             return
@@ -275,7 +320,10 @@ class MemeStickersPlugin(Star):
                 yield self._plain(event, "未找到可安装的贴纸包")
                 return
             op, _ = await self.pack_manager.install(infos)
-            await self._ensure_emoji_font()
+            try:
+                await self._ensure_emoji_font()
+            except Exception as e:
+                logger.warning(f"安装时检查 Emoji 字体失败: {e}")
             self._reload_bundled_fonts()
             yield self._plain(event, f"安装完成：成功 {len(op.succeed)}，跳过 {len(op.skipped)}，失败 {len(op.failed)}")
             return
@@ -311,12 +359,23 @@ class MemeStickersPlugin(Star):
             return
 
         if sub == "fetch-emoji-font":
-            await self._ensure_emoji_font()
-            self._reload_bundled_fonts()
             p = self.packs_dir / "_shared" / self.EMOJI_FONT_NAME
-            yield self._plain(event,
-                f"emoji font fetched: {p}\\nexists={p.exists()} size={p.stat().st_size if p.exists() else 0}"
-            )
+            force = any(x in args for x in ("force", "-f", "--force"))
+            yield self._plain(event, "正在尝试下载 Emoji 字体，请稍候...")
+            try:
+                await self._ensure_emoji_font(force=force)
+                self._reload_bundled_fonts()
+                size_mb = p.stat().st_size / (1024 * 1024) if p.exists() else 0
+                yield self._plain(
+                    event,
+                    f"Emoji 字体获取成功！\n路径: {p}\n文件大小: {size_mb:.2f} MB"
+                )
+            except Exception as e:
+                yield self._plain(
+                    event,
+                    f"Emoji 字体获取失败: {type(e).__name__}: {e}\n"
+                    "提示：如果在国内 Docker 运行，请检查容器网络或配置 proxy 后重试。"
+                )
             return
 
         if sub in {"delete", "enable", "disable"}:

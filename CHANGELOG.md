@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.1
+
+- 修复初始化阶段因 Google Fonts 官方仓库改组导致的 `NotoColorEmoji.ttf` 404 错误。
+- 优化 Emoji 字体下载机制：采用后台异步安全下载，超时时间扩大至 60 秒，避免阻塞 AstrBot 启动与加载失败。
+- 增强字体回退机制（Font Fallback）：无本地字体时支持自动回退至系统字体与默认字体，防止极端情况直接抛出 `RuntimeError`。
+- 修复 `create_client` 函数传入自定义 `timeout` 或 `proxy` 时触发的 `TypeError` 问题。
+- 完善 `/meme-stickers fetch-emoji-font` 手动下载反馈与各指令的容错处理。
+
 ## v0.1.0
 
 - 初始发布 AstrBot 版本的 `meme_stickers` 插件。

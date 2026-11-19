@@ -78,7 +78,13 @@ class SourceFetcher(Protocol, Generic[M_contra]):
 
 
 def create_client(**kwargs):
-    return AsyncClient(proxy=config.proxy, follow_redirects=True, timeout=config.req_timeout, **kwargs)
+    kw = {
+        "proxy": config.proxy,
+        "follow_redirects": True,
+        "timeout": config.req_timeout,
+        **kwargs,
+    }
+    return AsyncClient(**kw)
 
 
 def create_req_sem():

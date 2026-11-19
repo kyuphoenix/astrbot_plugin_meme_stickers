@@ -16,29 +16,31 @@
 <details>
 <summary><strong>安装失败必看！！！</strong></summary>
 
-### 安装后提示 `libEGL.so.1` 缺失？
+### 1. 安装后提示 `libEGL.so.1` 缺失？
 
 由于本插件基于 `Skia` 图形引擎开发，在 Docker 镜像或者部分系统中运行时，可能会因为缺少底层图形依赖而报错：
 
 > `AssertionError: libEGL.so.1: cannot open shared object file: No such file or directory`
 
-无需重建容器，只需两步即可手动补全依赖。
+无需重建容器，只需两步即可手动补全依赖：
 
-### 1. 进入 AstrBot 容器
-
-宿主机直接运行 AstrBot 可跳过这一步。
-
+**进入 AstrBot 容器（宿主机直接运行可跳过）：**
 ```bash
 docker exec -it -u root astrbot /bin/bash
 ```
 
-### 2. 安装依赖
-
+**安装系统图形依赖：**
 ```bash
 apt-get update && apt-get install -y libegl1 libgl1 libglib2.0-0t64 libfontconfig1 libpng-dev libjpeg-dev fontconfig && fc-cache -fv
 ```
 
-该命令适用于 `docker` 容器或 `debian/ubuntu` 系统。若宿主机是其他系统，需要自行补全 `libEGL.so.1` 相关依赖。
+### 2. 启动时 Emoji 字体下载失败 / 网络 404？
+
+插件已优化 Emoji 字体的下载机制：
+- 修复了官方仓库架构调整导致的 404 错误；
+- Emoji 字体改为后台异步安全获取，不会阻断插件初始化与 AstrBot 的启动；
+- 增加了系统字体回退机制，即使未下载 Emoji 字体，也不会影响基础文字排版与贴纸制作；
+- 若国内 Docker 环境访问 GitHub 困难，建议在插件配置中填写 `proxy`（HTTP/SOCKS5 代理），或在聊天中发送 `/meme-stickers fetch-emoji-font` 手动重试补全。
 
 </details>
 
