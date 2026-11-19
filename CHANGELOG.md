@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.2
+
+- 配置文件与面板预置多个镜像源选项：
+  - 新增 `mirror_preset` 镜像源预设模式，支持 `jsdelivr_mixed` (默认推荐混合加速)、`official` (官方直连)、`ghfast` (ghfast加速镜像)、`ghproxy` (gh-proxy镜像)、`gitmirror` (GitMirror镜像)、`kkgithub` (KKGitHub镜像) 以及 `custom` (完全自定义)。
+  - 新增 `emoji_font_url` 配置项，预置 jsDelivr CDN、官方 Tag、ghfast、gh-proxy、gitmirror 等多个候选直链，默认采用 jsDelivr CDN，国内秒级拉取。
+  - `hub_manifest_url` 和 `github_url_template` 增加多个预置镜像选项。
+- 增强自动 Fallback：字体下载优先使用配置源，若配置源故障会自动按候选列表顺序依次尝试备用镜像，保障高可用性。
+- 修复 `update_config` 动态更新配置时模块单例属性同步问题。
+
 ## v0.1.1
 
 - 修复初始化阶段因 Google Fonts 官方仓库改组导致的 `NotoColorEmoji.ttf` 404 错误。

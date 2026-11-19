@@ -36,13 +36,25 @@ apt-get update && apt-get install -y libegl1 libgl1 libglib2.0-0t64 libfontconfi
 
 ### 2. 启动时 Emoji 字体下载失败 / 网络 404？
 
-插件已优化 Emoji 字体的下载机制：
-- 修复了官方仓库架构调整导致的 404 错误；
+插件已优化 Emoji 字体与贴纸包的拉取机制，并内置多个国内高速镜像源：
+- 默认采用 `jsdelivr_mixed` 模式（Emoji 字体走 jsDelivr CDN 极速秒级拉取，无需魔法）；
 - Emoji 字体改为后台异步安全获取，不会阻断插件初始化与 AstrBot 的启动；
 - 增加了系统字体回退机制，即使未下载 Emoji 字体，也不会影响基础文字排版与贴纸制作；
-- 若国内 Docker 环境访问 GitHub 困难，建议在插件配置中填写 `proxy`（HTTP/SOCKS5 代理），或在聊天中发送 `/meme-stickers fetch-emoji-font` 手动重试补全。
+- 可在插件配置面板中直接选择镜像源预设（`mirror_preset`）或手动切换候选源，亦支持配置 `proxy` 代理。
 
 </details>
+
+## 镜像源与网络配置
+
+插件在 AstrBot Web 控制台配置面板中提供了预置的镜像源选项：
+
+| 配置项 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `mirror_preset` | `jsdelivr_mixed` | 预设模式：`jsdelivr_mixed` (默认推荐混合加速)、`official` (官方直连)、`ghfast` (ghfast镜像)、`ghproxy` (gh-proxy镜像)、`gitmirror` (GitMirror镜像)、`kkgithub` (KKGitHub镜像)、`custom` (自定义) |
+| `emoji_font_url` | jsDelivr CDN 直链 | Emoji 字体下载地址，下拉框内置多个候选镜像，支持自动 fallback |
+| `hub_manifest_url` | 官方清单地址 | 在线贴纸包 Hub 清单地址，下拉框内置多个候选镜像 |
+| `github_url_template` | 官方模板 | 贴纸资源下载 URL 模板，下拉框内置多个候选镜像 |
+| `proxy` | 空 | HTTP/SOCKS5 代理地址（如 `http://127.0.0.1:7890`） |
 
 ## 命令说明
 

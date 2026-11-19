@@ -4,6 +4,66 @@
     "type": "bool",
     "default": true
   },
+  "mirror_preset": {
+    "description": "镜像源预设模式",
+    "type": "string",
+    "default": "jsdelivr_mixed",
+    "options": [
+      "jsdelivr_mixed",
+      "official",
+      "ghfast",
+      "ghproxy",
+      "gitmirror",
+      "kkgithub",
+      "custom"
+    ],
+    "hint": "预置的拉取源方案：jsdelivr_mixed(推荐混合加速, Emoji字体极速拉取)、official(官方直连, 需代理)、ghfast(ghfast加速镜像)、ghproxy(gh-proxy镜像)、gitmirror(GitMirror镜像)、kkgithub(KKGitHub镜像)、custom(完全自定义下方配置)"
+  },
+  "emoji_font_url": {
+    "description": "Emoji 字体下载地址",
+    "type": "string",
+    "default": "https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+    "options": [
+      "https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+      "https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+      "https://ghfast.top/https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+      "https://raw.gitmirror.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf"
+    ],
+    "hint": "Emoji 字体 (NotoColorEmoji.ttf) 的下载直链。国内推荐 jsDelivr CDN，免翻墙且秒级拉取。"
+  },
+  "hub_manifest_url": {
+    "description": "贴纸 Hub 清单地址",
+    "type": "string",
+    "default": "https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json",
+    "options": [
+      "https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json",
+      "https://ghfast.top/https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json",
+      "https://raw.gitmirror.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json",
+      "https://raw.kkgithub.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json"
+    ],
+    "hint": "在线贴纸包 Hub 清单地址。用于 /meme-stickers list online 以及安装贴纸包。"
+  },
+  "github_url_template": {
+    "description": "GitHub Raw 贴纸资源下载模板",
+    "type": "string",
+    "default": "https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}",
+    "options": [
+      "https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}",
+      "https://ghfast.top/https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}",
+      "https://gh-proxy.com/https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}",
+      "https://raw.gitmirror.com/{owner}/{repo}/{ref_path}/{path}",
+      "https://raw.kkgithub.com/{owner}/{repo}/{ref_path}/{path}"
+    ],
+    "hint": "贴纸包图片、背景与自有字体的下载 URL 模板。支持 {owner}, {repo}, {ref_path}, {path} 变量。"
+  },
+  "proxy": {
+    "description": "网络请求代理地址",
+    "type": "string",
+    "default": "",
+    "hint": "如 http://127.0.0.1:7890 或 socks5://127.0.0.1:10808。配置后所有请求均走该代理。"
+  },
   "interactive_preview_image_format": {
     "description": "交互生成过程中图片格式",
     "type": "string",
@@ -26,21 +86,6 @@
       "step": 1
     }
   },
-  "proxy": {
-    "description": "网络请求代理地址",
-    "type": "string",
-    "default": ""
-  },
-  "github_url_template": {
-    "description": "GitHub Raw 下载地址模板",
-    "type": "string",
-    "default": "https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}"
-  },
-  "hub_manifest_url": {
-    "description": "贴纸 Hub 清单地址",
-    "type": "string",
-    "default": "https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json"
-  },
   "retry_times": {
     "description": "请求重试次数",
     "type": "int",
@@ -54,6 +99,6 @@
   "req_timeout": {
     "description": "请求超时时间（秒）",
     "type": "int",
-    "default": 5
+    "default": 15
   }
 }

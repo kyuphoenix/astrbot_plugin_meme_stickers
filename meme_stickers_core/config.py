@@ -56,8 +56,44 @@ def resolve_color_to_tuple(color: str) -> RGBAColorTuple:
     )
 
 
+MIRROR_PRESETS: dict[str, dict[str, str]] = {
+    "jsdelivr_mixed": {
+        "github_url_template": "https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}",
+        "hub_manifest_url": "https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json",
+        "emoji_font_url": "https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+    },
+    "official": {
+        "github_url_template": "https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}",
+        "hub_manifest_url": "https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json",
+        "emoji_font_url": "https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+    },
+    "ghfast": {
+        "github_url_template": "https://ghfast.top/https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}",
+        "hub_manifest_url": "https://ghfast.top/https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json",
+        "emoji_font_url": "https://ghfast.top/https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+    },
+    "ghproxy": {
+        "github_url_template": "https://gh-proxy.com/https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}",
+        "hub_manifest_url": "https://gh-proxy.com/https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json",
+        "emoji_font_url": "https://gh-proxy.com/https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+    },
+    "gitmirror": {
+        "github_url_template": "https://raw.gitmirror.com/{owner}/{repo}/{ref_path}/{path}",
+        "hub_manifest_url": "https://raw.gitmirror.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json",
+        "emoji_font_url": "https://raw.gitmirror.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+    },
+    "kkgithub": {
+        "github_url_template": "https://raw.kkgithub.com/{owner}/{repo}/{ref_path}/{path}",
+        "hub_manifest_url": "https://raw.kkgithub.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json",
+        "emoji_font_url": "https://raw.kkgithub.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+    },
+}
+
+
 class ConfigModel(BaseModel):
     proxy: str | None = Field(None, alias="proxy")
+
+    mirror_preset: str = "jsdelivr_mixed"
 
     github_url_template: str = (
         "https://raw.githubusercontent.com/{owner}/{repo}/{ref_path}/{path}"
@@ -65,9 +101,12 @@ class ConfigModel(BaseModel):
     hub_manifest_url: str = (
         "https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/manifest.json"
     )
+    emoji_font_url: str = (
+        "https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf"
+    )
     retry_times: int = 3
     req_concurrency: int = 8
-    req_timeout: int = 5
+    req_timeout: int = 15
 
     auto_update: bool = True
     force_update: bool = False
@@ -97,8 +136,16 @@ def update_config(config_dict: dict | None = None):
     global config
     base = DEFAULT_CONFIG.model_dump()
     if config_dict:
+        preset_key = config_dict.get("mirror_preset")
+        if preset_key and preset_key in MIRROR_PRESETS:
+            preset_vals = MIRROR_PRESETS[preset_key]
+            for k, v in preset_vals.items():
+                if k not in config_dict or not config_dict[k]:
+                    base[k] = v
         base.update(config_dict)
-    config = ConfigModel(**base)
+    new_cfg = ConfigModel(**base)
+    for field in ConfigModel.model_fields:
+        setattr(config, field, getattr(new_cfg, field))
 
 
 def set_data_dir(path):

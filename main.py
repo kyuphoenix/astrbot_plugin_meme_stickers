@@ -105,29 +105,43 @@ class MemeStickersPlugin(Star):
         if not force and target.exists() and target.stat().st_size > 1024 * 1024:
             return
 
-        src = FileSourceGitHubTag(
-            owner="googlefonts",
-            repo="noto-emoji",
-            tag="v2020-09-16-unicode13_1",
-            path="fonts",
-        )
+        urls_to_try: list[str] = []
+        if getattr(ms_config, "emoji_font_url", None):
+            urls_to_try.append(ms_config.emoji_font_url)
+
+        # 预设候选镜像源列表（依次尝试：jsDelivr CDN -> 官方Tag -> 国内镜像）
+        default_candidates = [
+            "https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+            "https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+            "https://raw.githubusercontent.com/googlefonts/noto-emoji/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+            "https://ghfast.top/https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+            "https://gh-proxy.com/https://raw.githubusercontent.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+            "https://raw.gitmirror.com/googlefonts/noto-emoji/refs/tags/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf",
+        ]
+        for c in default_candidates:
+            if c not in urls_to_try:
+                urls_to_try.append(c)
+
         tmp_target = shared_dir / f"{self.EMOJI_FONT_NAME}.tmp"
-        try:
-            async with create_client(timeout=60) as cli:
+        last_exc: Exception | None = None
+        async with create_client(timeout=60) as cli:
+            for url in urls_to_try:
                 try:
-                    resp = await fetch_github_source(src, self.EMOJI_FONT_NAME, cli=cli)
-                except Exception:
-                    fallback_url = "https://raw.githubusercontent.com/googlefonts/noto-emoji/v2020-09-16-unicode13_1/fonts/NotoColorEmoji.ttf"
-                    resp = await fetch_url_source(FileSourceURL(type="url", url=fallback_url), cli=cli)
+                    logger.debug(f"尝试拉取 Emoji 字体: {url}")
+                    resp = await fetch_url_source(FileSourceURL(type="url", url=url), cli=cli)
+                    if len(resp.content) >= 1024 * 1024:
+                        tmp_target.write_bytes(resp.content)
+                        tmp_target.replace(target)
+                        return
+                    raise ValueError(f"下载文件过小 ({len(resp.content)} bytes)")
+                except Exception as e:
+                    last_exc = e
+                    tmp_target.unlink(missing_ok=True)
+                    logger.debug(f"通过 {url} 下载 Emoji 字体失败 ({e})，尝试下一个候选源...")
+                    continue
 
-            if len(resp.content) < 1024 * 1024:
-                raise ValueError(f"下载文件过小 ({len(resp.content)} bytes)，可能不完整")
-
-            tmp_target.write_bytes(resp.content)
-            tmp_target.replace(target)
-        except Exception:
-            tmp_target.unlink(missing_ok=True)
-            raise
+        if last_exc:
+            raise last_exc
 
     def _reload_bundled_fonts(self):
         shared = self.packs_dir / "_shared"
