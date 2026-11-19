@@ -78,8 +78,11 @@ class SourceFetcher(Protocol, Generic[M_contra]):
 
 
 def create_client(**kwargs):
+    raw_proxy = kwargs.pop("proxy", config.proxy)
+    raw_str = str(raw_proxy).strip() if raw_proxy is not None else ""
+    proxy = raw_str if raw_str else None
     kw = {
-        "proxy": config.proxy,
+        "proxy": proxy,
         "follow_redirects": True,
         "timeout": config.req_timeout,
         **kwargs,

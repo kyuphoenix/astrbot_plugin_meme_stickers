@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.1
+
+- 修复空代理配置（`proxy: ""`）导致 httpx 抛出 `ValueError: Unknown scheme for proxy URL URL('')` 的问题。
+  - 在 `ConfigModel` 中增加 `proxy` 校验器，自动将空字符串归一化为 `None`。
+  - 在 `create_client` 中添加代理参数安全清洗，彻底杜绝拉取 Hub 列表与字体时的空代理异常。
+- 修复 AstrBot `PluginRequest` 对象没有 `get_json` 属性导致的解析异常（`'PluginRequest' object has no attribute 'get_json'`）。
+  - 实现 `_parse_request_json` 兼容方法，全面支持 `await req.json()`、`req.json` 属性、`req.get_json()` 以及 `req.body` 等多种请求体解析途径。
+  - 为所有 Web API 路由处理函数添加灵活传参兼容，确保不同 AstrBot 版本下的分发调度稳定运行。
+
 ## v0.2.0
 
 - 新增 AstrBot 官方规范的可视化插件页面（Plugin Page / View: `playground`）：

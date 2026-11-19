@@ -120,6 +120,12 @@ class ConfigModel(BaseModel):
     final_sticker_image_format: SkiaEncodedImageFormatType = "png"
     non_png_quality: int = 95
 
+    @field_validator("proxy", mode="before")
+    def _validate_proxy(cls, v):  # noqa: N805
+        if not v or not str(v).strip():
+            return None
+        return str(v).strip()
+
     @field_validator("default_sticker_background", mode="before")
     def _validate_str_color_to_int(cls, v):  # noqa: N805
         if isinstance(v, int):

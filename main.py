@@ -708,6 +708,49 @@ class MemeStickersPlugin(Star):
                 logger.warning(f"注册 Web API {route} 失败: {e}")
 
     @staticmethod
+    async def _parse_request_json(req):
+        if req is None:
+            return {}
+        if hasattr(req, "json"):
+            j = getattr(req, "json")
+            if callable(j):
+                try:
+                    res = j()
+                    if asyncio.iscoroutine(res):
+                        res = await res
+                    if isinstance(res, dict):
+                        return res
+                except Exception:
+                    pass
+            elif isinstance(j, dict):
+                return j
+        if hasattr(req, "get_json"):
+            gj = getattr(req, "get_json")
+            if callable(gj):
+                try:
+                    res = gj()
+                    if asyncio.iscoroutine(res):
+                        res = await res
+                    if isinstance(res, dict):
+                        return res
+                except Exception:
+                    pass
+        for attr in ("body", "data", "_body"):
+            if hasattr(req, attr):
+                val = getattr(req, attr)
+                if isinstance(val, (bytes, str)):
+                    import json
+                    try:
+                        res = json.loads(val)
+                        if isinstance(res, dict):
+                            return res
+                    except Exception:
+                        pass
+                elif isinstance(val, dict):
+                    return val
+        return {}
+
+    @staticmethod
     def _safe_color_parse(c):
         if isinstance(c, (list, tuple)) and len(c) in (3, 4):
             r, g, b = int(c[0]), int(c[1]), int(c[2])
@@ -715,7 +758,7 @@ class MemeStickersPlugin(Star):
             return (r, g, b, a)
         return resolve_color_to_tuple(str(c))
 
-    async def web_get_status(self):
+    async def web_get_status(self, *args, **kwargs):
         shared_dir = self.packs_dir / "_shared"
         emoji_p = shared_dir / self.EMOJI_FONT_NAME
         primary_p = shared_dir / "YurukaFangTang.ttf"
@@ -758,13 +801,13 @@ class MemeStickersPlugin(Star):
                     "emoji_font_url": getattr(ms_config, "emoji_font_url", ""),
                     "hub_manifest_url": getattr(ms_config, "hub_manifest_url", ""),
                     "github_url_template": getattr(ms_config, "github_url_template", ""),
-                    "proxy": getattr(ms_config, "proxy", ""),
+                    "proxy": getattr(ms_config, "proxy", "") or "",
                 },
                 "bundled_fonts": self.bundled_fonts,
             }
         })
 
-    async def web_get_hub(self):
+    async def web_get_hub(self, *args, **kwargs):
         try:
             hub = await fetch_hub()
             installed_slugs = {p.slug for p in self.pack_manager.packs}
@@ -779,9 +822,10 @@ class MemeStickersPlugin(Star):
         except Exception as e:
             return error_response(f"获取在线 Hub 列表失败: {e}", status_code=500)
 
-    async def web_install_pack(self):
+    async def web_install_pack(self, *args, **kwargs):
         try:
-            body = await request.get_json() if request else {}
+            req = kwargs.get("request") or (args[0] if args else request)
+            body = await self._parse_request_json(req)
             slugs = body.get("slugs", [])
             install_all = body.get("all", False)
             hub = await fetch_hub()
@@ -809,7 +853,7 @@ class MemeStickersPlugin(Star):
         except Exception as e:
             return error_response(f"安装贴纸包出错: {e}", status_code=500)
 
-    async def web_reload_packs(self):
+    async def web_reload_packs(self, *args, **kwargs):
         try:
             op = self.pack_manager.reload(clear_updating_flags=True)
             try:
@@ -828,9 +872,10 @@ class MemeStickersPlugin(Star):
         except Exception as e:
             return error_response(f"重载失败: {e}", status_code=500)
 
-    async def web_fetch_emoji_font(self):
+    async def web_fetch_emoji_font(self, *args, **kwargs):
         try:
-            body = await request.get_json() if request else {}
+            req = kwargs.get("request") or (args[0] if args else request)
+            body = await self._parse_request_json(req)
             force = body.get("force", True)
             custom_url = body.get("url")
             await self._ensure_emoji_font(force=force, custom_url=custom_url)
@@ -848,7 +893,7 @@ class MemeStickersPlugin(Star):
         except Exception as e:
             return error_response(f"下载 Emoji 字体失败: {e}", status_code=500)
 
-    async def web_get_packs_detail(self):
+    async def web_get_packs_detail(self, *args, **kwargs):
         packs_tree = {}
         for pack in self.pack_manager.available_packs:
             if not pack.manifest:
@@ -879,9 +924,10 @@ class MemeStickersPlugin(Star):
             }
         return json_response({"status": "ok", "data": packs_tree})
 
-    async def web_generate(self):
+    async def web_generate(self, *args, **kwargs):
         try:
-            body = await request.get_json() if request else {}
+            req = kwargs.get("request") or (args[0] if args else request)
+            body = await self._parse_request_json(req)
             pack_slug = body.get("pack_slug")
             sticker_name = body.get("sticker_name")
             text = body.get("text", "")
@@ -948,9 +994,10 @@ class MemeStickersPlugin(Star):
         except Exception as e:
             return error_response(f"生成表情包失败: {e}", status_code=500)
 
-    async def web_switch_mirror(self):
+    async def web_switch_mirror(self, *args, **kwargs):
         try:
-            body = await request.get_json() if request else {}
+            req = kwargs.get("request") or (args[0] if args else request)
+            body = await self._parse_request_json(req)
             preset = body.get("preset")
             if not preset:
                 return error_response("缺少 preset 参数", status_code=400)
