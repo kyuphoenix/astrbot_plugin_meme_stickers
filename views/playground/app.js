@@ -27,7 +27,12 @@ class BridgeClient {
     const url = `/api/plug/${PLUGIN_NAME}/${cleanEp}${q ? "?" + q : ""}`;
     const res = await fetch(url);
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      let errDetail = res.statusText;
+      try {
+        const j = await res.json();
+        errDetail = j.message || j.error || j.detail || JSON.stringify(j);
+      } catch (_) {}
+      throw new Error(`HTTP ${res.status}: ${errDetail}`);
     }
     const json = await res.json();
     return json.data !== undefined ? json.data : json;
@@ -45,8 +50,16 @@ class BridgeClient {
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`HTTP ${res.status}: ${errText}`);
+      let errDetail = res.statusText;
+      try {
+        const j = await res.json();
+        errDetail = j.message || j.error || j.detail || JSON.stringify(j);
+      } catch (_) {
+        try {
+          errDetail = await res.text();
+        } catch (_) {}
+      }
+      throw new Error(`HTTP ${res.status}: ${errDetail}`);
     }
     const json = await res.json();
     return json.data !== undefined ? json.data : json;

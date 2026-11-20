@@ -146,10 +146,25 @@ class StickerPack:
         merged_config cache will clear after these operations
         """
         if not self._cached_merged_config:
+            manifest_default = (
+                getattr(self.manifest, "default_config", None)
+                if getattr(self, "manifest", None)
+                else None
+            )
+            d1 = (
+                manifest_default.model_dump(exclude_unset=True)
+                if hasattr(manifest_default, "model_dump")
+                else (manifest_default or {})
+            )
+            d2 = (
+                self.config.model_dump(exclude_unset=True)
+                if hasattr(self.config, "model_dump")
+                else (self.config or {})
+            )
             self._cached_merged_config = StickerPackConfig(
                 **deep_merge(
-                    (lambda d, **kw: d.model_dump(**kw) if hasattr(d, "model_dump") else d)(self.manifest.default_config, exclude_unset=True),
-                    (lambda d, **kw: d.model_dump(**kw) if hasattr(d, "model_dump") else d)(self.config, exclude_unset=True),
+                    d1,
+                    d2,
                     skip_merge_paths={"commands"},
                 ),
             )

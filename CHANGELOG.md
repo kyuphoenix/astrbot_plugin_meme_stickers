@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.2
+
+- 修复拉取/安装本地贴纸包后 `GET /status` 抛出 `Internal server error` 的问题：
+  - 修复 `p.manifest.author` 属性不存在导致的 `AttributeError`（`StickerPackManifest` 模型中无 `author` 字段，改为安全反射访问并默认回退为空字符串）。
+  - 为 `web_get_status` 和 `web_get_packs_detail` 增加全局异常拦截保护与详细日志记录，杜绝未捕获异常导致 AstrBot 框架返回 500。
+  - 为贴纸包 manifest 信息与分类/贴纸列表解析增加防御性容错，避免个别贴纸包损坏影响整个工作台。
+  - 增强 `StickerPack.merged_config`，在 manifest 为空或未加载时不抛异常安全降级。
+  - 优化前端 `app.js` 的错误响应解析，遇到非 200 响应时自动提取后端真实报错信息。
+
 ## v0.2.1
 
 - 修复空代理配置（`proxy: ""`）导致 httpx 抛出 `ValueError: Unknown scheme for proxy URL URL('')` 的问题。

@@ -759,53 +759,82 @@ class MemeStickersPlugin(Star):
         return resolve_color_to_tuple(str(c))
 
     async def web_get_status(self, *args, **kwargs):
-        shared_dir = self.packs_dir / "_shared"
-        emoji_p = shared_dir / self.EMOJI_FONT_NAME
-        primary_p = shared_dir / "YurukaFangTang.ttf"
-        
-        packs_data = []
-        for p in self.pack_manager.packs:
-            packs_data.append({
-                "slug": p.slug,
-                "name": p.manifest.name if p.manifest else p.slug,
-                "author": p.manifest.author if p.manifest else "",
-                "description": p.manifest.description if p.manifest else "",
-                "version": p.manifest.version if p.manifest else "",
-                "stickers_count": len(p.manifest.stickers) if p.manifest else 0,
-                "categories": list(p.manifest.resolved_stickers_by_category.keys()) if p.manifest else [],
-                "disabled": p.config.disabled,
-                "unavailable": p.unavailable,
-            })
+        try:
+            shared_dir = self.packs_dir / "_shared"
+            emoji_p = shared_dir / self.EMOJI_FONT_NAME
+            primary_p = shared_dir / "YurukaFangTang.ttf"
             
-        return json_response({
-            "status": "ok",
-            "data": {
-                "installed_packs": packs_data,
-                "total_packs": len(packs_data),
-                "available_packs_count": len(self.pack_manager.available_packs),
-                "emoji_font": {
-                    "name": self.EMOJI_FONT_NAME,
-                    "exists": emoji_p.exists(),
-                    "size": emoji_p.stat().st_size if emoji_p.exists() else 0,
-                    "size_mb": round(emoji_p.stat().st_size / (1024 * 1024), 2) if emoji_p.exists() else 0,
-                    "path": str(emoji_p),
-                },
-                "primary_font": {
-                    "name": "YurukaFangTang.ttf",
-                    "exists": primary_p.exists(),
-                    "size": primary_p.stat().st_size if primary_p.exists() else 0,
-                    "path": str(primary_p),
-                },
-                "config": {
-                    "mirror_preset": getattr(ms_config, "mirror_preset", "jsdelivr_mixed"),
-                    "emoji_font_url": getattr(ms_config, "emoji_font_url", ""),
-                    "hub_manifest_url": getattr(ms_config, "hub_manifest_url", ""),
-                    "github_url_template": getattr(ms_config, "github_url_template", ""),
-                    "proxy": getattr(ms_config, "proxy", "") or "",
-                },
-                "bundled_fonts": self.bundled_fonts,
-            }
-        })
+            packs_data = []
+            for p in self.pack_manager.packs:
+                manifest = getattr(p, "manifest", None)
+                categories = []
+                stickers_count = 0
+                if manifest:
+                    try:
+                        stickers_count = len(getattr(manifest, "stickers", []))
+                        if hasattr(manifest, "resolved_stickers_by_category"):
+                            categories = list(manifest.resolved_stickers_by_category.keys())
+                    except Exception as e:
+                        logger.warning(f"获取贴纸包 {getattr(p, 'slug', 'unknown')} 分类失败: {e}")
+
+                is_disabled = False
+                try:
+                    cfg = getattr(p, "config", None)
+                    if cfg and hasattr(cfg, "disabled"):
+                        is_disabled = bool(cfg.disabled)
+                except Exception:
+                    pass
+
+                is_unavailable = False
+                try:
+                    is_unavailable = bool(p.unavailable)
+                except Exception:
+                    pass
+
+                packs_data.append({
+                    "slug": getattr(p, "slug", ""),
+                    "name": getattr(manifest, "name", getattr(p, "slug", "")),
+                    "author": getattr(manifest, "author", "") or "",
+                    "description": getattr(manifest, "description", "") or "",
+                    "version": str(getattr(manifest, "version", "") or ""),
+                    "stickers_count": stickers_count,
+                    "categories": categories,
+                    "disabled": is_disabled,
+                    "unavailable": is_unavailable,
+                })
+                
+            return json_response({
+                "status": "ok",
+                "data": {
+                    "installed_packs": packs_data,
+                    "total_packs": len(packs_data),
+                    "available_packs_count": len(self.pack_manager.available_packs),
+                    "emoji_font": {
+                        "name": self.EMOJI_FONT_NAME,
+                        "exists": emoji_p.exists(),
+                        "size": emoji_p.stat().st_size if emoji_p.exists() else 0,
+                        "size_mb": round(emoji_p.stat().st_size / (1024 * 1024), 2) if emoji_p.exists() else 0,
+                        "path": str(emoji_p),
+                    },
+                    "primary_font": {
+                        "name": "YurukaFangTang.ttf",
+                        "exists": primary_p.exists(),
+                        "size": primary_p.stat().st_size if primary_p.exists() else 0,
+                        "path": str(primary_p),
+                    },
+                    "config": {
+                        "mirror_preset": getattr(ms_config, "mirror_preset", "jsdelivr_mixed"),
+                        "emoji_font_url": getattr(ms_config, "emoji_font_url", ""),
+                        "hub_manifest_url": getattr(ms_config, "hub_manifest_url", ""),
+                        "github_url_template": getattr(ms_config, "github_url_template", ""),
+                        "proxy": getattr(ms_config, "proxy", "") or "",
+                    },
+                    "bundled_fonts": self.bundled_fonts,
+                }
+            })
+        except Exception as e:
+            logger.error(f"web_get_status 出错: {e}", exc_info=True)
+            return error_response(f"获取状态失败: {e}", status_code=500)
 
     async def web_get_hub(self, *args, **kwargs):
         try:
@@ -820,6 +849,7 @@ class MemeStickersPlugin(Star):
                 })
             return json_response({"status": "ok", "data": items})
         except Exception as e:
+            logger.error(f"web_get_hub 出错: {e}", exc_info=True)
             return error_response(f"获取在线 Hub 列表失败: {e}", status_code=500)
 
     async def web_install_pack(self, *args, **kwargs):
@@ -851,6 +881,7 @@ class MemeStickersPlugin(Star):
                 }
             })
         except Exception as e:
+            logger.error(f"web_install_pack 出错: {e}", exc_info=True)
             return error_response(f"安装贴纸包出错: {e}", status_code=500)
 
     async def web_reload_packs(self, *args, **kwargs):
@@ -870,6 +901,7 @@ class MemeStickersPlugin(Star):
                 }
             })
         except Exception as e:
+            logger.error(f"web_reload_packs 出错: {e}", exc_info=True)
             return error_response(f"重载失败: {e}", status_code=500)
 
     async def web_fetch_emoji_font(self, *args, **kwargs):
@@ -891,38 +923,61 @@ class MemeStickersPlugin(Star):
                 }
             })
         except Exception as e:
+            logger.error(f"web_fetch_emoji_font 出错: {e}", exc_info=True)
             return error_response(f"下载 Emoji 字体失败: {e}", status_code=500)
 
     async def web_get_packs_detail(self, *args, **kwargs):
-        packs_tree = {}
-        for pack in self.pack_manager.available_packs:
-            if not pack.manifest:
-                continue
-            cat_dict = {}
-            for cat_name, stickers in pack.manifest.resolved_stickers_by_category.items():
-                cat_dict[cat_name] = [
-                    {
-                        "name": s.name,
-                        "text": s.params.text,
-                        "width": s.params.width,
-                        "height": s.params.height,
-                        "text_x": s.params.text_x,
-                        "text_y": s.params.text_y,
-                        "text_align": s.params.text_align,
-                        "text_rotate_degrees": s.params.text_rotate_degrees,
-                        "text_color": [s.params.text_color[0], s.params.text_color[1], s.params.text_color[2], s.params.text_color[3]],
-                        "stroke_color": [s.params.stroke_color[0], s.params.stroke_color[1], s.params.stroke_color[2], s.params.stroke_color[3]],
-                        "stroke_width_factor": s.params.stroke_width_factor,
-                        "font_size": s.params.font_size,
-                        "font_style": s.params.font_style,
-                    }
-                    for s in stickers
-                ]
-            packs_tree[pack.slug] = {
-                "name": pack.manifest.name,
-                "categories": cat_dict,
-            }
-        return json_response({"status": "ok", "data": packs_tree})
+        try:
+            packs_tree = {}
+            for pack in self.pack_manager.available_packs:
+                manifest = getattr(pack, "manifest", None)
+                if not manifest:
+                    continue
+                cat_dict = {}
+                try:
+                    resolved_cats = manifest.resolved_stickers_by_category
+                except Exception as e:
+                    logger.warning(f"获取贴纸包 {getattr(pack, 'slug', 'unknown')} 分类失败: {e}")
+                    continue
+
+                for cat_name, stickers in resolved_cats.items():
+                    sticker_list = []
+                    for s in stickers:
+                        try:
+                            params = getattr(s, "params", None)
+                            if not params:
+                                continue
+                            raw_tc = getattr(params, "text_color", None)
+                            tc = list(raw_tc) if isinstance(raw_tc, (list, tuple)) else [0, 0, 0, 255]
+                            raw_sc = getattr(params, "stroke_color", None)
+                            sc = list(raw_sc) if isinstance(raw_sc, (list, tuple)) else [255, 255, 255, 255]
+                            sticker_list.append({
+                                "name": getattr(s, "name", ""),
+                                "text": getattr(params, "text", ""),
+                                "width": getattr(params, "width", 0),
+                                "height": getattr(params, "height", 0),
+                                "text_x": getattr(params, "text_x", 0.0),
+                                "text_y": getattr(params, "text_y", 0.0),
+                                "text_align": getattr(params, "text_align", "center"),
+                                "text_rotate_degrees": getattr(params, "text_rotate_degrees", 0.0),
+                                "text_color": tc,
+                                "stroke_color": sc,
+                                "stroke_width_factor": getattr(params, "stroke_width_factor", 0.0),
+                                "font_size": getattr(params, "font_size", 0.0),
+                                "font_style": getattr(params, "font_style", "normal"),
+                            })
+                        except Exception as e:
+                            logger.warning(f"解析贴纸项失败: {e}")
+                    cat_dict[cat_name] = sticker_list
+
+                packs_tree[pack.slug] = {
+                    "name": getattr(manifest, "name", pack.slug),
+                    "categories": cat_dict,
+                }
+            return json_response({"status": "ok", "data": packs_tree})
+        except Exception as e:
+            logger.error(f"web_get_packs_detail 出错: {e}", exc_info=True)
+            return error_response(f"获取贴纸详情失败: {e}", status_code=500)
 
     async def web_generate(self, *args, **kwargs):
         try:
@@ -992,6 +1047,7 @@ class MemeStickersPlugin(Star):
                 }
             })
         except Exception as e:
+            logger.error(f"web_generate 出错: {e}", exc_info=True)
             return error_response(f"生成表情包失败: {e}", status_code=500)
 
     async def web_switch_mirror(self, *args, **kwargs):
@@ -1012,4 +1068,5 @@ class MemeStickersPlugin(Star):
                 }
             })
         except Exception as e:
+            logger.error(f"web_switch_mirror 出错: {e}", exc_info=True)
             return error_response(f"切换镜像源失败: {e}", status_code=500)
