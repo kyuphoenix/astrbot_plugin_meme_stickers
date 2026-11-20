@@ -66,10 +66,11 @@ class SessionState:
     sticker_name: str | None = None
     targets: list[str] | None = None
     expires_at: float = 0.0
+    invalid_count: int = 0
 
 
 class MemeStickersPlugin(Star):
-    SESSION_TIMEOUT_SECONDS = 180
+    SESSION_TIMEOUT_SECONDS = 90
     EMOJI_FONT_NAME = "NotoColorEmoji.ttf"
 
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -179,11 +180,61 @@ class MemeStickersPlugin(Star):
 
     @staticmethod
     def _is_exit(txt: str) -> bool:
-        return txt.lower() in {"0", "q", "quit", "exit", "cancel"}
+        return txt.lower() in {
+            "0", "q", "quit", "exit", "cancel",
+            "退出", "取消", "算了", "不弄了", "关闭", "结束", "退出制作"
+        }
 
     @staticmethod
     def _is_back(txt: str) -> bool:
-        return txt.lower() in {"r", "b", "back", "return"}
+        return txt.lower() in {"r", "b", "back", "return", "返回", "上一级", "上一步"}
+
+    @staticmethod
+    def _render_sticker_image_sync(
+        base_path: Path,
+        params,
+        bg=None,
+        auto_resize: bool = True,
+        debug: bool = False,
+        image_format: str = "png",
+        quality: int = 100,
+    ) -> bytes:
+        pic = make_sticker_picture_from_params(base_path, params, auto_resize=auto_resize, debug=debug)
+        surface = make_surface_for_picture(pic, bg)
+        fmt = IMAGE_FORMAT_MAP.get(image_format, skia.kPNG)
+        return save_image(surface, fmt, quality=quality)
+
+    @staticmethod
+    def _render_sticker_grid_sync(
+        category_params,
+        sample,
+        base_path: Path,
+        image_format: str = "jpeg",
+        quality: int = 80,
+    ) -> bytes:
+        surface = draw_sticker_grid_from_params(category_params, sample, base_path)
+        fmt = IMAGE_FORMAT_MAP.get(image_format, skia.kJPEG)
+        return save_image(surface, fmt, quality=quality)
+
+    @staticmethod
+    def _render_packs_grid_sync(
+        packs,
+        image_format: str = "jpeg",
+        quality: int = 80,
+    ) -> bytes:
+        surface = draw_sticker_grid_from_packs(packs)
+        fmt = IMAGE_FORMAT_MAP.get(image_format, skia.kJPEG)
+        return save_image(surface, fmt, quality=quality)
+
+    @staticmethod
+    def _render_hub_packs_grid_sync(
+        params,
+        image_format: str = "jpeg",
+        quality: int = 80,
+    ) -> bytes:
+        surface = draw_sticker_pack_grid(params)
+        fmt = IMAGE_FORMAT_MAP.get(image_format, skia.kJPEG)
+        return save_image(surface, fmt, quality=quality)
 
     async def _send_image(self, event: AstrMessageEvent, data: bytes, suffix: str, ext: str = "jpg"):
         p = Path(tempfile.gettempdir()) / f"meme_{suffix}_{id(event)}.{ext}"
@@ -249,16 +300,13 @@ class MemeStickersPlugin(Star):
         ]
         for s in sample:
             s.font_families = [*self.bundled_fonts, *s.font_families]
-        img = save_image(
-            draw_sticker_grid_from_params(
-                pack.manifest.sticker_grid.resolved_category_params,
-                sample,
-                pack.base_path,
-            ),
-            IMAGE_FORMAT_MAP.get(ms_config.interactive_preview_image_format, skia.kJPEG),
-            quality=ms_config.non_png_quality
-            if ms_config.interactive_preview_image_format != "png"
-            else 100,
+        img = await asyncio.to_thread(
+            self._render_sticker_grid_sync,
+            pack.manifest.sticker_grid.resolved_category_params,
+            sample,
+            pack.base_path,
+            ms_config.interactive_preview_image_format,
+            ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
         )
         async for r in self._send_image(event, img, f"pick_category_{pack.slug}"):
             yield r
@@ -270,6 +318,8 @@ class MemeStickersPlugin(Star):
     @filter.command("meme-stickers", alias={"stickers"})
     async def meme_stickers(self, event: AstrMessageEvent):
         """管理贴纸包、查看列表、安装资源，并支持按指定贴纸直接生成表情包。"""
+        if hasattr(event, "stop_event"):
+            event.stop_event()
         parts = event.get_message_str().strip().split()
         args = parts[1:] if len(parts) > 1 else []
         if not args or args[0] in {"help", "-h", "--help"}:
@@ -290,10 +340,11 @@ class MemeStickersPlugin(Star):
                 )
                 preview_cache = Path(StarTools.get_data_dir("astrbot_plugin_meme_stickers")) / "_preview_cache"
                 params = await temp_sticker_card_params(preview_cache, hub, manifests, checksums)
-                img = save_image(
-                    draw_sticker_pack_grid(params),
-                    IMAGE_FORMAT_MAP.get(ms_config.interactive_preview_image_format, skia.kJPEG),
-                    quality=ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
+                img = await asyncio.to_thread(
+                    self._render_hub_packs_grid_sync,
+                    params,
+                    ms_config.interactive_preview_image_format,
+                    ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
                 )
                 async for r in self._send_image(event, img, "list_online"):
                     yield r
@@ -304,10 +355,11 @@ class MemeStickersPlugin(Star):
             if not packs:
                 yield self._plain(event, "当前无可用贴纸包")
                 return
-            img = save_image(
-                draw_sticker_grid_from_packs(packs),
-                IMAGE_FORMAT_MAP.get(ms_config.interactive_preview_image_format, skia.kJPEG),
-                quality=ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
+            img = await asyncio.to_thread(
+                self._render_packs_grid_sync,
+                packs,
+                ms_config.interactive_preview_image_format,
+                ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
             )
             async for r in self._send_image(event, img, "list"):
                 yield r
@@ -363,10 +415,13 @@ class MemeStickersPlugin(Star):
             params = sticker.model_copy(deep=True)
             params.text = text
             params.font_families = [*self.bundled_fonts, *params.font_families]
-            pic = make_sticker_picture_from_params(pack.base_path, params, auto_resize=True)
-            img = save_image(
-                make_surface_for_picture(pic, None),
-                IMAGE_FORMAT_MAP.get(ms_config.interactive_preview_image_format, skia.kJPEG),
+            img = await asyncio.to_thread(
+                self._render_sticker_image_sync,
+                pack.base_path,
+                params,
+                bg=None,
+                auto_resize=True,
+                image_format=ms_config.interactive_preview_image_format,
                 quality=ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
             )
             async for r in self._send_image(event, img, "debug_font"):
@@ -375,9 +430,9 @@ class MemeStickersPlugin(Star):
             # Current rendering path in sticker.py uses direct Typeface.MakeFromFile.
             actual = attempted if attempted != "(none)" else "(fallback/system)"
             yield self._plain(event,
-                "debug-font result:\\n"
-                f"attempted_font_path: {attempted}\\n"
-                f"actual_used_font_path: {actual}\\n"
+                "debug-font result:\n"
+                f"attempted_font_path: {attempted}\n"
+                f"actual_used_font_path: {actual}\n"
                 f"emoji_font_path: {self.packs_dir / '_shared' / self.EMOJI_FONT_NAME}"
             )
             return
@@ -417,10 +472,11 @@ class MemeStickersPlugin(Star):
                     yield self._plain(event, "当前无可用贴纸包")
                     return
                 self.sessions[self._sid(event)] = self._new_session(mode="generate", step="pick_pack")
-                img = save_image(
-                    draw_sticker_grid_from_packs(packs),
-                    IMAGE_FORMAT_MAP.get(ms_config.interactive_preview_image_format, skia.kJPEG),
-                    quality=ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
+                img = await asyncio.to_thread(
+                    self._render_packs_grid_sync,
+                    packs,
+                    ms_config.interactive_preview_image_format,
+                    ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
                 )
                 async for r in self._send_image(event, img, "pick_pack"):
                     yield r
@@ -478,10 +534,14 @@ class MemeStickersPlugin(Star):
                 bv = opts.get("-b", opts.get("--background"))
                 bg = skia.Color(*resolve_color_to_tuple(bv)) if bv else ms_config.default_sticker_background
 
-            pic = make_sticker_picture_from_params(pack.base_path, params, auto_resize=auto_resize, debug=debug)
-            img = save_image(
-                make_surface_for_picture(pic, bg),
-                IMAGE_FORMAT_MAP.get(image_format, skia.kPNG),
+            img = await asyncio.to_thread(
+                self._render_sticker_image_sync,
+                pack.base_path,
+                params,
+                bg=bg,
+                auto_resize=auto_resize,
+                debug=debug,
+                image_format=image_format,
                 quality=ms_config.non_png_quality if image_format != "png" else 100,
             )
             async for r in self._send_image(event, img, "gen"):
@@ -493,17 +553,25 @@ class MemeStickersPlugin(Star):
     @filter.command("pjsk")
     async def pjsk_cmd(self, event: AstrMessageEvent):
         """进入 Project Sekai 贴纸包的交互式制作流程。"""
+        if hasattr(event, "stop_event"):
+            event.stop_event()
         async for r in self._start_pack_interactive(event, "pjsk"):
             yield r
 
     @filter.command("arc", alias={"arcaea"})
     async def arc_cmd(self, event: AstrMessageEvent):
         """进入 Arcaea 贴纸包的交互式制作流程。"""
+        if hasattr(event, "stop_event"):
+            event.stop_event()
         async for r in self._start_pack_interactive(event, "arcaea"):
             yield r
 
-    @filter.event_message_type(filter.EventMessageType.ALL)
+    @filter.event_message_type(filter.EventMessageType.ALL, priority=50)
     async def on_message(self, event: AstrMessageEvent):
+        # 1. 快速短路：当前无任何活跃会话时，零开销直接退出，绝对不影响其他消息或插件
+        if not self.sessions:
+            return
+
         sid = self._sid(event)
         st = self.sessions.get(sid)
         if not st:
@@ -512,20 +580,34 @@ class MemeStickersPlugin(Star):
         txt = event.get_message_str().strip()
         if not txt:
             return
-        if txt.startswith("/"):
-            return
-        if txt.lower() in {"pjsk", "arc", "arcaea", "meme-stickers", "stickers"}:
-            return
 
+        # 2. 会话过期检查
         if st.expires_at and self._now() > st.expires_at:
             self.sessions.pop(sid, None)
             return
-        self._touch_session(st)
 
+        # 3. 如果用户输入了其他指令（以 / ! ！ # . 。 ~ $ 等开头，或是已知指令），
+        # 说明用户正在使用其他功能，必须主动清理会话并放行事件，绝不阻碍其他插件！
+        COMMAND_PREFIXES = ("/", "!", "！", "#", ".", "。", "、", "~", "$")
+        txt_lower = txt.lower()
+        if txt.startswith(COMMAND_PREFIXES) or txt_lower in {
+            "pjsk", "arc", "arcaea", "meme-stickers", "stickers", "help", "菜单", "帮助"
+        }:
+            self.sessions.pop(sid, None)
+            logger.debug(f"[meme_stickers] 检测到用户输入指令前缀或系统命令，已自动退出会话放行: {txt}")
+            return  # 绝不能 stop_event()，必须放行给其他插件或 AstrBot 路由
+
+        # 4. 退出指令检查
         if self._is_exit(txt):
             self.sessions.pop(sid, None)
-            yield self._plain(event, "已退出操作")
+            if hasattr(event, "stop_event"):
+                event.stop_event()
+            yield self._plain(event, "已退出表情包制作")
             return
+
+        # 5. 命中本插件的交互输入，阻止事件向后传播至 LLM 或其他插件
+        if hasattr(event, "stop_event"):
+            event.stop_event()
 
         if st.step == "confirm_manage":
             if txt.lower() != "y":
@@ -562,8 +644,16 @@ class MemeStickersPlugin(Star):
             if not pack:
                 pack = self.pack_manager.find_pack(txt)
             if not pack:
-                yield self._plain(event, "未找到贴纸包，请重新输入")
+                st.invalid_count += 1
+                if st.invalid_count >= 2:
+                    self.sessions.pop(sid, None)
+                    yield self._plain(event, "未匹配到贴纸包，已自动退出表情包制作。")
+                    return
+                yield self._plain(event, "未找到贴纸包，请重新输入（输入 0 或'退出'取消）")
                 return
+
+            st.invalid_count = 0
+            self._touch_session(st)
             st.pack_slug = pack.slug
             st.step = "pick_category"
             categories = sorted(pack.manifest.resolved_stickers_by_category.keys())
@@ -573,14 +663,17 @@ class MemeStickersPlugin(Star):
             ]
             for s in sample:
                 s.font_families = [*self.bundled_fonts, *s.font_families]
-            img = save_image(
-                draw_sticker_grid_from_params(pack.manifest.sticker_grid.resolved_category_params, sample, pack.base_path),
-                IMAGE_FORMAT_MAP.get(ms_config.interactive_preview_image_format, skia.kJPEG),
-                quality=ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
+            img = await asyncio.to_thread(
+                self._render_sticker_grid_sync,
+                pack.manifest.sticker_grid.resolved_category_params,
+                sample,
+                pack.base_path,
+                ms_config.interactive_preview_image_format,
+                ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
             )
             async for r in self._send_image(event, img, "pick_category"):
                 yield r
-            yield self._plain(event, "请输入分类名称或序号（输入 r 返回）")
+            yield self._plain(event, "请输入分类名称或序号（输入 r 返回，0 退出）")
             return
 
         if st.step == "pick_category":
@@ -591,6 +684,8 @@ class MemeStickersPlugin(Star):
                 return
             if self._is_back(txt):
                 st.step = "pick_pack"
+                st.invalid_count = 0
+                self._touch_session(st)
                 yield self._plain(event, "已返回贴纸包选择，请输入贴纸包序号、slug 或名称")
                 return
 
@@ -601,15 +696,22 @@ class MemeStickersPlugin(Star):
             if not c:
                 c = next((x for x in categories if x.lower() == txt.lower()), None)
             if not c:
-                yield self._plain(event, "未找到分类，请重新输入")
+                st.invalid_count += 1
+                if st.invalid_count >= 2:
+                    self.sessions.pop(sid, None)
+                    yield self._plain(event, "未匹配到分类，已自动退出表情包制作。")
+                    return
+                yield self._plain(event, "未找到分类，请重新输入（输入 0 或'退出'取消）")
                 return
 
+            st.invalid_count = 0
+            self._touch_session(st)
             st.category = c
             stickers = pack.manifest.resolved_stickers_by_category[c]
             if len(stickers) == 1:
                 st.sticker_name = stickers[0].name
                 st.step = "input_text"
-                yield self._plain(event, "该分类只有一个贴纸，请直接输入要添加的文本")
+                yield self._plain(event, "该分类只有一个贴纸，请直接输入要添加的文本（输入 0 退出）")
                 return
 
             st.step = "pick_sticker"
@@ -617,14 +719,17 @@ class MemeStickersPlugin(Star):
             gp = pack.manifest.sticker_grid.resolved_stickers_params.get(c, pack.manifest.sticker_grid.default_params)
             for s in preview:
                 s.font_families = [*self.bundled_fonts, *s.font_families]
-            img = save_image(
-                draw_sticker_grid_from_params(gp, preview, pack.base_path),
-                IMAGE_FORMAT_MAP.get(ms_config.interactive_preview_image_format, skia.kJPEG),
-                quality=ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
+            img = await asyncio.to_thread(
+                self._render_sticker_grid_sync,
+                gp,
+                preview,
+                pack.base_path,
+                ms_config.interactive_preview_image_format,
+                ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
             )
             async for r in self._send_image(event, img, "pick_sticker"):
                 yield r
-            yield self._plain(event, "请输入贴纸名称或序号（输入 r 返回分类）")
+            yield self._plain(event, "请输入贴纸名称或序号（输入 r 返回分类，0 退出）")
             return
 
         if st.step == "pick_sticker":
@@ -635,6 +740,8 @@ class MemeStickersPlugin(Star):
                 return
             if self._is_back(txt):
                 st.step = "pick_category"
+                st.invalid_count = 0
+                self._touch_session(st)
                 yield self._plain(event, "已返回分类选择，请输入分类名称或序号")
                 return
 
@@ -645,12 +752,19 @@ class MemeStickersPlugin(Star):
             if not sticker:
                 sticker = next((x for x in stickers if x.name.lower() == txt.lower()), None)
             if not sticker:
-                yield self._plain(event, "未找到贴纸，请重新输入")
+                st.invalid_count += 1
+                if st.invalid_count >= 2:
+                    self.sessions.pop(sid, None)
+                    yield self._plain(event, "未匹配到贴纸，已自动退出表情包制作。")
+                    return
+                yield self._plain(event, "未找到贴纸，请重新输入（输入 0 或'退出'取消）")
                 return
 
+            st.invalid_count = 0
+            self._touch_session(st)
             st.sticker_name = sticker.name
             st.step = "input_text"
-            yield self._plain(event, "请输入贴纸文本")
+            yield self._plain(event, "请输入贴纸文本（输入 0 退出）")
             return
 
         if st.step == "input_text":
@@ -674,13 +788,16 @@ class MemeStickersPlugin(Star):
 
             image_format = ms_config.final_sticker_image_format
             bg = ms_config.default_sticker_background if image_format == "jpeg" else None
-            pic = make_sticker_picture_from_params(pack.base_path, params, auto_resize=True)
-            img = save_image(
-                make_surface_for_picture(pic, bg),
-                IMAGE_FORMAT_MAP.get(image_format, skia.kPNG),
-                quality=ms_config.non_png_quality if image_format != "png" else 100,
-            )
             try:
+                img = await asyncio.to_thread(
+                    self._render_sticker_image_sync,
+                    pack.base_path,
+                    params,
+                    bg=bg,
+                    auto_resize=True,
+                    image_format=image_format,
+                    quality=ms_config.non_png_quality if image_format != "png" else 100,
+                )
                 async for r in self._send_image(event, img, "interactive"):
                     yield r
             finally:
@@ -1025,10 +1142,14 @@ class MemeStickersPlugin(Star):
                 bv = body.get("background")
                 bg = skia.Color(*self._safe_color_parse(bv)) if bv else ms_config.default_sticker_background
 
-            pic = make_sticker_picture_from_params(pack.base_path, params, auto_resize=auto_resize, debug=debug)
-            img_bytes = save_image(
-                make_surface_for_picture(pic, bg),
-                IMAGE_FORMAT_MAP.get(image_format, skia.kPNG),
+            img_bytes = await asyncio.to_thread(
+                self._render_sticker_image_sync,
+                pack.base_path,
+                params,
+                bg=bg,
+                auto_resize=auto_resize,
+                debug=debug,
+                image_format=image_format,
                 quality=ms_config.non_png_quality if image_format != "png" else 100,
             )
             
