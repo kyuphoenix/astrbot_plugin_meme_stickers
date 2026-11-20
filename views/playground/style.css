@@ -291,7 +291,37 @@ textarea.form-control {
   object-fit: contain;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   border-radius: 4px;
-  transition: transform 0.2s;
+  transition: opacity 0.15s ease, filter 0.15s ease, transform 0.2s;
+}
+
+.preview-img.rendering {
+  opacity: 0.75;
+  filter: blur(0.5px);
+}
+
+.live-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  background: var(--bg-card);
+  padding: 3px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.live-toggle:hover {
+  border-color: var(--accent-color);
+  color: var(--text-main);
+}
+
+.live-toggle input[type="checkbox"] {
+  accent-color: var(--accent-color);
+  cursor: pointer;
 }
 
 .preview-placeholder {

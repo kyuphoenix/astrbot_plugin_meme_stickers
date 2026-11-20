@@ -985,7 +985,7 @@ class MemeStickersPlugin(Star):
             body = await self._parse_request_json(req)
             pack_slug = body.get("pack_slug")
             sticker_name = body.get("sticker_name")
-            text = body.get("text", "")
+            text = body.get("text")
             
             pack = self.pack_manager.find_pack(pack_slug)
             if not pack or pack.unavailable or not pack.manifest:
@@ -995,7 +995,7 @@ class MemeStickersPlugin(Star):
                 return error_response(f"贴纸未找到: {sticker_name}", status_code=404)
                 
             params = sticker.params.model_copy(deep=True)
-            params.text = text if text != "" else sticker.params.text
+            params.text = str(text) if text is not None else sticker.params.text
             params.font_families = [*self.bundled_fonts, *params.font_families]
             
             if "text_x" in body and body["text_x"] is not None:

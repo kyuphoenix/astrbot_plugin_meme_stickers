@@ -162,7 +162,7 @@
 
             <div style="margin-top: 18px;">
               <button id="btn-generate" class="btn btn-primary">
-                <span>🎨 立即生成表情包</span>
+                <span>🎨 立即渲染 / 刷新</span>
               </button>
             </div>
           </div>
@@ -171,15 +171,21 @@
         <!-- Preview Column -->
         <div class="preview-panel">
           <div class="card" style="flex: 1; display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
               <h2 class="card-title" style="margin: 0;"><span>🖼️</span> 渲染预览画布</h2>
-              <div id="render-time-badge" class="badge">就绪</div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label class="live-toggle" title="修改文字或参数时在画布上实时更新渲染">
+                  <input type="checkbox" id="live-preview-check" checked />
+                  <span>⚡ 实时预览</span>
+                </label>
+                <div id="render-time-badge" class="badge">就绪</div>
+              </div>
             </div>
 
             <div class="preview-canvas-container" id="preview-container">
               <div id="placeholder-box" class="preview-placeholder">
-                <p style="font-size: 32px; margin-bottom: 8px;">📷</p>
-                <p>请在左侧选择贴纸并输入文字后，点击“立即生成”进行预览</p>
+                <p style="font-size: 32px; margin-bottom: 8px;">🎨</p>
+                <p>选择贴纸后将在此实时渲染，左侧修改文字或参数可即时预览</p>
               </div>
               <img id="preview-image" class="preview-img" style="display: none;" alt="Preview" />
             </div>

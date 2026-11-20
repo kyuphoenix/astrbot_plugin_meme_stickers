@@ -108,6 +108,7 @@ const elements = {
   previewContainer: document.getElementById("preview-container"),
   placeholderBox: document.getElementById("placeholder-box"),
   previewImage: document.getElementById("preview-image"),
+  livePreviewCheck: document.getElementById("live-preview-check"),
   renderTimeBadge: document.getElementById("render-time-badge"),
   metaTagsBox: document.getElementById("meta-tags-box"),
   badgePack: document.getElementById("badge-pack"),
@@ -150,29 +151,58 @@ elements.tabs.forEach((tab) => {
   });
 });
 
+// Real-time Preview Scheduler & Concurrency Control
+let liveDebounceTimer = null;
+let currentRenderSeq = 0;
+
+function scheduleLivePreview(delayMs = 120) {
+  if (elements.livePreviewCheck && !elements.livePreviewCheck.checked) {
+    return;
+  }
+  clearTimeout(liveDebounceTimer);
+  liveDebounceTimer = setTimeout(() => {
+    generateSticker(true);
+  }, delayMs);
+}
+
 // Sync Color Pickers
 elements.textColorPicker.addEventListener("input", (e) => {
   elements.textColorHex.value = e.target.value;
+  scheduleLivePreview(60);
+});
+elements.textColorHex.addEventListener("input", (e) => {
+  elements.textColorPicker.value = e.target.value;
+  scheduleLivePreview(120);
 });
 elements.textColorHex.addEventListener("change", (e) => {
   elements.textColorPicker.value = e.target.value;
+  scheduleLivePreview(0);
 });
 elements.strokeColorPicker.addEventListener("input", (e) => {
   elements.strokeColorHex.value = e.target.value;
+  scheduleLivePreview(60);
+});
+elements.strokeColorHex.addEventListener("input", (e) => {
+  elements.strokeColorPicker.value = e.target.value;
+  scheduleLivePreview(120);
 });
 elements.strokeColorHex.addEventListener("change", (e) => {
   elements.strokeColorPicker.value = e.target.value;
+  scheduleLivePreview(0);
 });
 
 // Sync Sliders
 elements.fontSizeRange.addEventListener("input", (e) => {
   elements.fontSizeVal.textContent = `${e.target.value}px`;
+  scheduleLivePreview(60);
 });
 elements.rotateRange.addEventListener("input", (e) => {
   elements.rotateVal.textContent = `${e.target.value}°`;
+  scheduleLivePreview(60);
 });
 elements.strokeWidthRange.addEventListener("input", (e) => {
   elements.strokeWidthVal.textContent = e.target.value;
+  scheduleLivePreview(60);
 });
 
 // Load Status & Config
@@ -341,22 +371,32 @@ function onStickerChange() {
   if (currentSelectedSticker.font_style) {
     elements.fontStyleSelect.value = currentSelectedSticker.font_style;
   }
+
+  // 选定贴纸后立即在画布上实时渲染初始预览
+  scheduleLivePreview(0);
 }
 
 // Generate Sticker Action
-async function generateSticker() {
+async function generateSticker(isLive = false) {
   const packSlug = elements.packSelect.value;
   const stickerName = elements.stickerSelect.value;
 
   if (!packSlug || !stickerName) {
-    alert("请先选择贴纸包与贴纸！");
+    if (!isLive) {
+      alert("请先选择贴纸包与贴纸！");
+    }
     return;
   }
 
+  const renderSeq = ++currentRenderSeq;
   const startTime = performance.now();
-  elements.btnGenerate.disabled = true;
-  elements.btnGenerate.innerHTML = `<span class="spinner"></span> 渲染中...`;
-  elements.renderTimeBadge.textContent = "生成中...";
+
+  if (!isLive) {
+    elements.btnGenerate.disabled = true;
+    elements.btnGenerate.innerHTML = `<span class="spinner"></span> 渲染中...`;
+  }
+  elements.previewImage.classList.add("rendering");
+  elements.renderTimeBadge.textContent = isLive ? "⚡ 实时渲染中..." : "渲染中...";
   elements.renderTimeBadge.className = "badge badge-warning";
 
   const payload = {
@@ -384,6 +424,11 @@ async function generateSticker() {
 
   try {
     const data = await client.apiPost("generate", payload);
+    // 丢弃并发过程中过期的渲染请求响应
+    if (renderSeq !== currentRenderSeq) {
+      return;
+    }
+
     const duration = Math.round(performance.now() - startTime);
 
     if (data.data_uri) {
@@ -392,7 +437,7 @@ async function generateSticker() {
       elements.previewImage.style.display = "block";
       elements.placeholderBox.style.display = "none";
 
-      elements.renderTimeBadge.textContent = `成功 (${duration}ms)`;
+      elements.renderTimeBadge.textContent = isLive ? `⚡ 实时 (${duration}ms)` : `就绪 (${duration}ms)`;
       elements.renderTimeBadge.className = "badge badge-success";
 
       elements.badgePack.textContent = `包: ${packSlug} / ${stickerName}`;
@@ -404,13 +449,21 @@ async function generateSticker() {
       elements.btnCopy.disabled = false;
     }
   } catch (err) {
-    elements.renderTimeBadge.textContent = "失败";
+    if (renderSeq !== currentRenderSeq) return;
+    elements.renderTimeBadge.textContent = "渲染失败";
     elements.renderTimeBadge.className = "badge badge-warning";
-    alert(`生成失败: ${err.message}`);
+    if (!isLive) {
+      alert(`生成失败: ${err.message}`);
+    }
     logToConsole(`生成失败: ${err.message}`);
   } finally {
-    elements.btnGenerate.disabled = false;
-    elements.btnGenerate.innerHTML = `<span>🎨 立即生成表情包</span>`;
+    if (renderSeq === currentRenderSeq) {
+      elements.previewImage.classList.remove("rendering");
+    }
+    if (!isLive) {
+      elements.btnGenerate.disabled = false;
+      elements.btnGenerate.innerHTML = `<span>🎨 立即渲染 / 刷新</span>`;
+    }
   }
 }
 
@@ -450,15 +503,31 @@ elements.btnReset.addEventListener("click", () => {
   }
 });
 
-// Event Listeners for selects
+// Event Listeners for selects & buttons
 elements.packSelect.addEventListener("change", onPackChange);
 elements.categorySelect.addEventListener("change", onCategoryChange);
 elements.stickerSelect.addEventListener("change", onStickerChange);
-elements.btnGenerate.addEventListener("click", generateSticker);
+elements.btnGenerate.addEventListener("click", () => generateSticker(false));
+
+// 实时监听输入与配置变动
+elements.textInput.addEventListener("input", () => scheduleLivePreview(150));
+elements.textAlignSelect.addEventListener("change", () => scheduleLivePreview(0));
+elements.textXInput.addEventListener("input", () => scheduleLivePreview(120));
+elements.textYInput.addEventListener("input", () => scheduleLivePreview(120));
+elements.fontStyleSelect.addEventListener("change", () => scheduleLivePreview(0));
+elements.imageFormatSelect.addEventListener("change", () => scheduleLivePreview(0));
+elements.autoResizeCheck.addEventListener("change", () => scheduleLivePreview(0));
+elements.debugCheck.addEventListener("change", () => scheduleLivePreview(0));
+if (elements.livePreviewCheck) {
+  elements.livePreviewCheck.addEventListener("change", (e) => {
+    if (e.target.checked) scheduleLivePreview(0);
+  });
+}
+
 elements.textInput.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
     e.preventDefault();
-    generateSticker();
+    generateSticker(false);
   }
 });
 
