@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Meme Stickers Playground</title>
+  <title>Meme Stickers 表情包工坊</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -13,7 +13,7 @@
       <div class="brand">
         <span class="brand-icon">🎨</span>
         <div>
-          <h1 class="brand-title">Meme Stickers 表情包游乐场</h1>
+          <h1 class="brand-title">Meme Stickers 表情包工坊</h1>
           <p class="brand-sub">可视化资源拉取与交互式贴纸生成工作台</p>
         </div>
       </div>
@@ -26,185 +26,188 @@
 
     <!-- Tab 1: Playground -->
     <main id="tab-playground" class="tab-content active">
-      <div class="playground-grid">
+      <div class="playground-layout">
         <!-- Controls Column -->
-        <div class="controls-panel">
-          <div class="card">
-            <h2 class="card-title"><span>🏷️</span> 贴纸选择</h2>
-            <div class="form-group">
-              <label class="form-label" for="pack-select">贴纸包</label>
-              <select id="pack-select" class="form-select">
+        <section class="card controls-card">
+          <div class="controls-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2 class="card-title" style="margin-bottom: 0;">⚙️ 参数配置</h2>
+            <button id="btn-reset-params" class="btn btn-sm btn-outline" title="恢复字号、旋转、描边、颜色等默认参数（保留当前输入的文字）">🔄 重置参数</button>
+            <button id="btn-reset" style="display:none;"></button>
+          </div>
+
+          <!-- Pack & Category Select -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="pack-select">贴纸包 (Pack)</label>
+              <select id="pack-select" class="form-control">
                 <option value="">正在加载已安装贴纸包...</option>
               </select>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label" for="category-select">分类 / 角色</label>
-                <select id="category-select" class="form-select" disabled>
-                  <option value="">请先选择贴纸包</option>
-                </select>
+            <div class="form-group flex-1">
+              <label for="category-select">分类/角色 (Category)</label>
+              <select id="category-select" class="form-control" disabled>
+                <option value="">请先选择贴纸包</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="sticker-select">具体贴纸 (Sticker)</label>
+            <select id="sticker-select" class="form-control" disabled>
+              <option value="">请选择贴纸</option>
+            </select>
+          </div>
+
+          <!-- Text Input -->
+          <div class="form-group">
+            <div class="label-val-row">
+              <label for="text-input">表情包文字</label>
+              <span style="font-size: 11px; color: var(--text-muted);">(Ctrl + Enter 快速生成)</span>
+            </div>
+            <textarea id="text-input" class="form-control" rows="2" placeholder="在此输入要绘制在表情包上的文字，支持 Emoji 如 🎉✨..."></textarea>
+          </div>
+
+          <!-- Sliders & Inputs -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <div class="label-val-row">
+                <label for="font-size-range">字号大小 (Font Size)</label>
+                <span class="val-tag" id="font-size-val">48px</span>
               </div>
-              <div class="form-group">
-                <label class="form-label" for="sticker-select">贴纸名称</label>
-                <select id="sticker-select" class="form-select" disabled>
-                  <option value="">请选择贴纸</option>
-                </select>
+              <input type="range" id="font-size-range" min="10" max="120" value="48" class="form-range" />
+            </div>
+
+            <div class="form-group flex-1">
+              <div class="label-val-row">
+                <label for="rotate-range">旋转角度 (Rotate)</label>
+                <span class="val-tag" id="rotate-val">0°</span>
+              </div>
+              <input type="range" id="rotate-range" min="-180" max="180" value="0" class="form-range" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <div class="label-val-row">
+                <label for="stroke-width-range">描边宽度 (Stroke)</label>
+                <span class="val-tag" id="stroke-width-val">0.08</span>
+              </div>
+              <input type="range" id="stroke-width-range" min="0" max="0.3" step="0.01" value="0.08" class="form-range" />
+            </div>
+
+            <div class="form-group flex-1">
+              <label for="text-align-select">对齐方式 (Align)</label>
+              <select id="text-align-select" class="form-control">
+                <option value="center" selected>居中 (Center)</option>
+                <option value="left">靠左 (Left)</option>
+                <option value="right">靠右 (Right)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Color Pickers -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>文字颜色</label>
+              <div class="color-row">
+                <input type="color" id="text-color-picker" value="#1a1a1a" class="color-picker" />
+                <input type="text" id="text-color-hex" value="#1a1a1a" class="form-control form-control-sm" />
+              </div>
+            </div>
+            <div class="form-group flex-1">
+              <label>描边颜色</label>
+              <div class="color-row">
+                <input type="color" id="stroke-color-picker" value="#ffffff" class="color-picker" />
+                <input type="text" id="stroke-color-hex" value="#ffffff" class="form-control form-control-sm" />
               </div>
             </div>
           </div>
 
-          <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-              <h2 class="card-title" style="margin-bottom: 0;"><span>✍️</span> 文字与排版配置</h2>
-              <button id="btn-reset-params" class="btn btn-secondary btn-sm" title="恢复字号、旋转、描边、颜色等默认参数（保留当前输入的文字）">🔄 重置参数</button>
+          <!-- Coordinates Offset & Format -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="text-x-input">X 坐标锚点</label>
+              <input type="number" id="text-x-input" class="form-control" placeholder="留空默认" />
             </div>
-            <div class="form-group">
-              <label class="form-label" for="text-input">
-                <span>贴纸文字</span>
-                <span style="font-size: 11px;">(Ctrl + Enter 快速生成)</span>
+            <div class="form-group flex-1">
+              <label for="text-y-input">Y 坐标锚点</label>
+              <input type="number" id="text-y-input" class="form-control" placeholder="留空默认" />
+            </div>
+            <div class="form-group flex-1">
+              <label for="image-format-select">输出格式</label>
+              <select id="image-format-select" class="form-control">
+                <option value="png" selected>PNG (透明度支持)</option>
+                <option value="jpeg">JPEG (带背景)</option>
+                <option value="webp">WebP</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row" style="margin-top: 4px;">
+            <div class="form-group flex-1">
+              <label for="font-style-select">字体字重</label>
+              <select id="font-style-select" class="form-control">
+                <option value="normal" selected>常规 (Normal)</option>
+                <option value="bold">粗体 (Bold)</option>
+                <option value="italic">斜体 (Italic)</option>
+                <option value="bold_italic">粗斜体 (Bold Italic)</option>
+              </select>
+            </div>
+            <div class="form-group flex-1" style="display: flex; flex-direction: column; justify-content: flex-end; gap: 8px;">
+              <label class="custom-checkbox">
+                <input type="checkbox" id="auto-resize-check" checked />
+                <span>自适应包围盒尺寸</span>
               </label>
-              <textarea id="text-input" class="form-control" rows="2" placeholder="在此输入要绘制在表情包上的文字，支持 Emoji 如 🎉✨..."></textarea>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label" for="font-size-input">字号大小</label>
-                <div class="range-wrap">
-                  <input type="range" id="font-size-range" class="range-input" min="10" max="120" value="48" />
-                  <span id="font-size-val" class="range-val">48px</span>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="text-align-select">对齐方式</label>
-                <select id="text-align-select" class="form-select">
-                  <option value="center" selected>居中 (Center)</option>
-                  <option value="left">靠左 (Left)</option>
-                  <option value="right">靠右 (Right)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">文字颜色</label>
-                <div class="color-picker-wrap">
-                  <input type="color" id="text-color-picker" class="color-input" value="#1a1a1a" />
-                  <input type="text" id="text-color-hex" class="form-control" value="#1a1a1a" />
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">描边颜色</label>
-                <div class="color-picker-wrap">
-                  <input type="color" id="stroke-color-picker" class="color-input" value="#ffffff" />
-                  <input type="text" id="stroke-color-hex" class="form-control" value="#ffffff" />
-                </div>
-              </div>
-            </div>
-
-            <details class="advanced-box">
-              <summary>🛠️ 高级参数微调 (坐标、旋转、描边与格式)</summary>
-              <div style="margin-top: 12px;">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label class="form-label" for="text-x-input">X 坐标 (px)</label>
-                    <input type="number" id="text-x-input" class="form-control" placeholder="留空默认" />
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="text-y-input">Y 坐标 (px)</label>
-                    <input type="number" id="text-y-input" class="form-control" placeholder="留空默认" />
-                  </div>
-                </div>
-
-                <div class="form-row">
-                  <div class="form-group">
-                    <label class="form-label" for="rotate-range">旋转角度</label>
-                    <div class="range-wrap">
-                      <input type="range" id="rotate-range" class="range-input" min="-180" max="180" value="0" />
-                      <span id="rotate-val" class="range-val">0°</span>
-                    </div>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="stroke-width-range">描边宽度比例</label>
-                    <div class="range-wrap">
-                      <input type="range" id="stroke-width-range" class="range-input" min="0" max="0.3" step="0.01" value="0.08" />
-                      <span id="stroke-width-val" class="range-val">0.08</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="form-row">
-                  <div class="form-group">
-                    <label class="form-label" for="font-style-select">字体字重</label>
-                    <select id="font-style-select" class="form-select">
-                      <option value="normal" selected>常规 (Normal)</option>
-                      <option value="bold">粗体 (Bold)</option>
-                      <option value="italic">斜体 (Italic)</option>
-                      <option value="bold_italic">粗斜体 (Bold Italic)</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="image-format-select">输出格式</label>
-                    <select id="image-format-select" class="form-select">
-                      <option value="png" selected>PNG (透明度支持)</option>
-                      <option value="jpeg">JPEG (带背景)</option>
-                      <option value="webp">WebP</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div class="form-row" style="margin-top: 6px;">
-                  <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); cursor: pointer;">
-                    <input type="checkbox" id="auto-resize-check" checked /> 自动缩放自适应尺寸
-                  </label>
-                  <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); cursor: pointer;">
-                    <input type="checkbox" id="debug-check" /> 绘制调试边界红框
-                  </label>
-                </div>
-              </div>
-            </details>
-
-            <div style="margin-top: 18px;">
-              <button id="btn-generate" class="btn btn-secondary btn-sm" style="width: 100%;">
-                <span>🧪 测试后端 Skia 生成</span>
-              </button>
+              <label class="custom-checkbox">
+                <input type="checkbox" id="debug-check" />
+                <span>绘制调试边界红框</span>
+              </label>
             </div>
           </div>
-        </div>
+
+          <div style="margin-top: 14px;">
+            <button id="btn-generate" class="btn btn-secondary btn-sm" style="width: 100%;">
+              <span>🧪 测试后端 Skia 生成</span>
+            </button>
+          </div>
+        </section>
 
         <!-- Preview Column -->
-        <div class="preview-panel">
-          <div class="card" style="flex: 1; display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
-              <h2 class="card-title" style="margin: 0;"><span>🖼️</span> 渲染预览画布</h2>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <label class="live-toggle" title="纯前端 Canvas 2D 硬件加速，0ms 实时渲染">
-                  <input type="checkbox" id="client-render-check" checked />
-                  <span style="color: #38bdf8; font-weight: 600;">⚡ 纯前端 (0ms)</span>
-                </label>
-                <label class="live-toggle" title="修改文字或参数时在画布上实时更新渲染">
-                  <input type="checkbox" id="live-preview-check" checked />
-                  <span>实时刷新</span>
-                </label>
-                <div id="render-time-badge" class="badge">就绪</div>
-              </div>
+        <section class="card preview-card">
+          <div class="preview-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+            <h2 class="card-title" style="margin: 0;">🖼️ 实时预览 (Live Canvas)</h2>
+            <div class="preview-tools" style="display: flex; gap: 12px; align-items: center;">
+              <label class="custom-checkbox small" title="纯前端 Canvas 2D 硬件加速，0ms 实时渲染">
+                <input type="checkbox" id="client-render-check" checked />
+                <span style="color: #38bdf8; font-weight: 600;">⚡ 纯前端 (0ms)</span>
+              </label>
+              <label class="custom-checkbox small" title="修改文字或参数时在画布上实时更新渲染">
+                <input type="checkbox" id="live-preview-check" checked />
+                <span>实时刷新</span>
+              </label>
+              <div id="render-time-badge" class="badge">就绪</div>
             </div>
+          </div>
 
-            <div class="preview-canvas-container" id="preview-container">
-              <div id="placeholder-box" class="preview-placeholder">
-                <p style="font-size: 32px; margin-bottom: 8px;">🎨</p>
-                <p>选择贴纸后将在此实时渲染，左侧修改文字或参数可即时预览</p>
-              </div>
-              <canvas id="preview-canvas" class="preview-canvas" style="display: none;"></canvas>
-              <img id="preview-image" class="preview-img" style="display: none;" alt="Preview" />
+          <div class="canvas-wrapper" id="preview-container">
+            <div id="placeholder-box" class="preview-placeholder">
+              <p style="font-size: 32px; margin-bottom: 8px;">🎨</p>
+              <p>选择贴纸后将在此实时渲染，左侧修改参数可即时预览</p>
             </div>
-
-            <div class="meta-tags" id="meta-tags-box" style="display: none;">
-              <span id="badge-pack" class="badge"></span>
-              <span id="badge-size" class="badge"></span>
-              <span id="badge-filesize" class="badge"></span>
+            <div class="canvas-box" id="canvas-box">
+              <canvas id="preview-canvas" style="display: none; max-width: 100%; height: auto;"></canvas>
+              <img id="preview-image" style="display: none; max-width: 100%; height: auto;" alt="Preview" />
             </div>
+          </div>
 
-            <div class="preview-actions">
+          <div class="meta-tags" id="meta-tags-box" style="display: none; justify-content: center; margin-top: 12px;">
+            <span id="badge-pack" class="badge"></span>
+            <span id="badge-size" class="badge"></span>
+            <span id="badge-filesize" class="badge"></span>
+          </div>
+
+          <div class="btn-group" style="margin-top: 14px;">
+            <div style="display: flex; gap: 10px;">
               <button id="btn-copy" class="btn btn-primary" style="flex: 1;" disabled>
                 <span>📋 复制到剪贴板</span>
               </button>
@@ -213,7 +216,7 @@
               </button>
             </div>
           </div>
-        </div>
+        </section>
       </div>
     </main>
 
