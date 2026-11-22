@@ -54,7 +54,10 @@
           </div>
 
           <div class="card">
-            <h2 class="card-title"><span>✍️</span> 文字与排版配置</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+              <h2 class="card-title" style="margin-bottom: 0;"><span>✍️</span> 文字与排版配置</h2>
+              <button id="btn-reset-params" class="btn btn-secondary btn-sm" title="恢复字号、旋转、描边、颜色等默认参数（保留当前输入的文字）">🔄 重置参数</button>
+            </div>
             <div class="form-group">
               <label class="form-label" for="text-input">
                 <span>贴纸文字</span>
@@ -161,8 +164,8 @@
             </details>
 
             <div style="margin-top: 18px;">
-              <button id="btn-generate" class="btn btn-primary">
-                <span>🎨 立即渲染 / 刷新</span>
+              <button id="btn-generate" class="btn btn-secondary btn-sm" style="width: 100%;">
+                <span>🧪 测试后端 Skia 生成</span>
               </button>
             </div>
           </div>
@@ -174,9 +177,13 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
               <h2 class="card-title" style="margin: 0;"><span>🖼️</span> 渲染预览画布</h2>
               <div style="display: flex; align-items: center; gap: 8px;">
+                <label class="live-toggle" title="纯前端 Canvas 2D 硬件加速，0ms 实时渲染">
+                  <input type="checkbox" id="client-render-check" checked />
+                  <span style="color: #38bdf8; font-weight: 600;">⚡ 纯前端 (0ms)</span>
+                </label>
                 <label class="live-toggle" title="修改文字或参数时在画布上实时更新渲染">
                   <input type="checkbox" id="live-preview-check" checked />
-                  <span>⚡ 实时预览</span>
+                  <span>实时刷新</span>
                 </label>
                 <div id="render-time-badge" class="badge">就绪</div>
               </div>
@@ -187,6 +194,7 @@
                 <p style="font-size: 32px; margin-bottom: 8px;">🎨</p>
                 <p>选择贴纸后将在此实时渲染，左侧修改文字或参数可即时预览</p>
               </div>
+              <canvas id="preview-canvas" class="preview-canvas" style="display: none;"></canvas>
               <img id="preview-image" class="preview-img" style="display: none;" alt="Preview" />
             </div>
 
@@ -197,14 +205,11 @@
             </div>
 
             <div class="preview-actions">
-              <button id="btn-download" class="btn btn-secondary" style="flex: 1;" disabled>
-                <span>💾 下载图片</span>
-              </button>
-              <button id="btn-copy" class="btn btn-secondary" style="flex: 1;" disabled>
+              <button id="btn-copy" class="btn btn-primary" style="flex: 1;" disabled>
                 <span>📋 复制到剪贴板</span>
               </button>
-              <button id="btn-reset" class="btn btn-secondary" title="重置参数为贴纸默认值">
-                <span>🔄 恢复默认</span>
+              <button id="btn-download" class="btn btn-secondary" style="flex: 1;" disabled>
+                <span>💾 下载图片</span>
               </button>
             </div>
           </div>

@@ -286,6 +286,37 @@ class MemeStickersPlugin(Star):
             yield self._plain(event, f"贴纸包不可用: {pack_query}")
             return
 
+        # 如果贴纸包禁用了分类选择（如 Arcaea），直接一步展示全量贴纸大网格
+        if getattr(pack.manifest.sticker_grid, "disable_category_select", False):
+            self.sessions[self._sid(event)] = self._new_session(
+                mode="generate",
+                step="pick_sticker",
+                pack_slug=pack.slug,
+            )
+            stickers = pack.manifest.resolved_stickers
+            preview = [
+                x.params.model_copy(update={"text": f"{i}. {x.name}"})
+                for i, x in enumerate(stickers, 1)
+            ]
+            gp = pack.manifest.sticker_grid.default_params
+            for s in preview:
+                s.font_families = [*self.bundled_fonts, *s.font_families]
+            img = await asyncio.to_thread(
+                self._render_sticker_grid_sync,
+                gp,
+                preview,
+                pack.base_path,
+                ms_config.interactive_preview_image_format,
+                ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
+            )
+            async for r in self._send_image(event, img, f"pick_sticker_{pack.slug}"):
+                yield r
+            yield self._plain(
+                event,
+                f"已进入 {pack.manifest.name} 贴纸选择，请发送名称或序号（输入 0 退出）",
+            )
+            return
+
         self.sessions[self._sid(event)] = self._new_session(
             mode="generate",
             step="pick_category",
@@ -655,6 +686,33 @@ class MemeStickersPlugin(Star):
             st.invalid_count = 0
             self._touch_session(st)
             st.pack_slug = pack.slug
+
+            if getattr(pack.manifest.sticker_grid, "disable_category_select", False):
+                st.step = "pick_sticker"
+                stickers = pack.manifest.resolved_stickers
+                preview = [
+                    x.params.model_copy(update={"text": f"{i}. {x.name}"})
+                    for i, x in enumerate(stickers, 1)
+                ]
+                gp = pack.manifest.sticker_grid.default_params
+                for s in preview:
+                    s.font_families = [*self.bundled_fonts, *s.font_families]
+                img = await asyncio.to_thread(
+                    self._render_sticker_grid_sync,
+                    gp,
+                    preview,
+                    pack.base_path,
+                    ms_config.interactive_preview_image_format,
+                    ms_config.non_png_quality if ms_config.interactive_preview_image_format != "png" else 100,
+                )
+                async for r in self._send_image(event, img, f"pick_sticker_{pack.slug}"):
+                    yield r
+                yield self._plain(
+                    event,
+                    f"以上是贴纸包 `{pack.manifest.name}` 中的贴纸，请输入名称或序号（输入 r 返回，0 退出）",
+                )
+                return
+
             st.step = "pick_category"
             categories = sorted(pack.manifest.resolved_stickers_by_category.keys())
             sample = [
@@ -739,13 +797,22 @@ class MemeStickersPlugin(Star):
                 yield self._plain(event, "贴纸包不可用，操作结束")
                 return
             if self._is_back(txt):
+                if getattr(pack.manifest.sticker_grid, "disable_category_select", False):
+                    st.step = "pick_pack"
+                    st.invalid_count = 0
+                    self._touch_session(st)
+                    yield self._plain(event, "已返回贴纸包选择，请输入贴纸包序号、slug 或名称")
+                    return
                 st.step = "pick_category"
                 st.invalid_count = 0
                 self._touch_session(st)
                 yield self._plain(event, "已返回分类选择，请输入分类名称或序号")
                 return
 
-            stickers = pack.manifest.resolved_stickers_by_category.get(st.category or "", [])
+            if getattr(pack.manifest.sticker_grid, "disable_category_select", False):
+                stickers = pack.manifest.resolved_stickers
+            else:
+                stickers = pack.manifest.resolved_stickers_by_category.get(st.category or "", [])
             sticker = None
             if txt.isdigit() and 1 <= int(txt) <= len(stickers):
                 sticker = stickers[int(txt) - 1]
@@ -817,6 +884,8 @@ class MemeStickersPlugin(Star):
             (f"/{self.PLUGIN_NAME}/fetch_emoji_font", self.web_fetch_emoji_font, ["POST"], "拉取Emoji字体"),
             (f"/{self.PLUGIN_NAME}/generate", self.web_generate, ["POST"], "Playground生成贴纸图片"),
             (f"/{self.PLUGIN_NAME}/switch_mirror", self.web_switch_mirror, ["POST"], "切换镜像源预设"),
+            (f"/{self.PLUGIN_NAME}/sticker_image", self.web_get_sticker_image, ["GET"], "获取贴纸底图"),
+            (f"/{self.PLUGIN_NAME}/font/primary", self.web_get_primary_font, ["GET"], "获取本地主字体"),
         ]
         for route, handler, methods, desc in apis:
             try:
@@ -1068,11 +1137,15 @@ class MemeStickersPlugin(Star):
                             tc = list(raw_tc) if isinstance(raw_tc, (list, tuple)) else [0, 0, 0, 255]
                             raw_sc = getattr(params, "stroke_color", None)
                             sc = list(raw_sc) if isinstance(raw_sc, (list, tuple)) else [255, 255, 255, 255]
+                            base_img = getattr(params, "base_image", "") or ""
+                            cdn_url = f"https://cdn.jsdelivr.net/gh/lgc-NB2Dev/meme-stickers-hub@main/{pack.slug}/{base_img}" if base_img else ""
                             sticker_list.append({
                                 "name": getattr(s, "name", ""),
                                 "text": getattr(params, "text", ""),
                                 "width": getattr(params, "width", 0),
                                 "height": getattr(params, "height", 0),
+                                "base_image": base_img,
+                                "cdn_url": cdn_url,
                                 "text_x": getattr(params, "text_x", 0.0),
                                 "text_y": getattr(params, "text_y", 0.0),
                                 "text_align": getattr(params, "text_align", "center"),
@@ -1191,3 +1264,70 @@ class MemeStickersPlugin(Star):
         except Exception as e:
             logger.error(f"web_switch_mirror 出错: {e}", exc_info=True)
             return error_response(f"切换镜像源失败: {e}", status_code=500)
+
+    @staticmethod
+    def _parse_query_params(req, *args, **kwargs):
+        r = kwargs.get("request") or (args[0] if args else req)
+        if not r:
+            return {}
+        if hasattr(r, "query_params"):
+            return dict(r.query_params)
+        if hasattr(r, "args"):
+            return dict(r.args)
+        if hasattr(r, "query"):
+            return dict(r.query)
+        if hasattr(r, "url"):
+            try:
+                from urllib.parse import parse_qs, urlparse
+                u = urlparse(str(r.url))
+                q = parse_qs(u.query)
+                return {k: v[0] for k, v in q.items() if v}
+            except Exception:
+                pass
+        return {}
+
+    async def web_get_sticker_image(self, *args, **kwargs):
+        try:
+            req = kwargs.get("request") or (args[0] if args else request)
+            q = self._parse_query_params(req, *args, **kwargs)
+            pack_slug = q.get("pack")
+            file_name = q.get("file")
+            if not pack_slug or not file_name:
+                return error_response("缺少 pack 或 file 参数", status_code=400)
+            pack = self.pack_manager.find_pack(pack_slug)
+            if not pack:
+                return error_response(f"未找到贴纸包: {pack_slug}", status_code=404)
+            img_path = (pack.base_path / file_name).resolve()
+            if not img_path.exists() or not img_path.is_file():
+                return error_response(f"未找到底图文件: {file_name}", status_code=404)
+            data = img_path.read_bytes()
+            import base64
+            b64 = base64.b64encode(data).decode("ascii")
+            return json_response({
+                "status": "ok",
+                "data": {
+                    "data_uri": f"data:image/png;base64,{b64}"
+                }
+            })
+        except Exception as e:
+            logger.error(f"web_get_sticker_image 出错: {e}", exc_info=True)
+            return error_response(f"获取底图失败: {e}", status_code=500)
+
+    async def web_get_primary_font(self, *args, **kwargs):
+        try:
+            shared_dir = self.packs_dir / "_shared"
+            font_p = shared_dir / "YurukaFangTang.ttf"
+            if not font_p.exists():
+                return error_response("本地未找到主字体 YurukaFangTang.ttf", status_code=404)
+            data = font_p.read_bytes()
+            import base64
+            b64 = base64.b64encode(data).decode("ascii")
+            return json_response({
+                "status": "ok",
+                "data": {
+                    "data_uri": f"data:font/ttf;base64,{b64}"
+                }
+            })
+        except Exception as e:
+            logger.error(f"web_get_primary_font 出错: {e}", exc_info=True)
+            return error_response(f"获取主字体失败: {e}", status_code=500)

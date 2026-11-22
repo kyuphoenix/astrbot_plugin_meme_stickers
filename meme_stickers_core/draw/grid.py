@@ -61,14 +61,15 @@ def draw_sticker_grid(
         if isinstance(background, skia.Image):
             bw = background.width()
             bh = background.height()
-            ratio, ox, _ = get_resize_cover_ratio_and_offset(bw, bh, surface_w, surface_h)
-            rw = bw * ratio
-            rh = bh * ratio
-            oy = 0.0
-            # Top-aligned cover: crop from bottom instead of center.
+            ratio, ox, oy = get_resize_cover_ratio_and_offset(
+                bw,
+                bh,
+                surface_w,
+                surface_h,
+            )
             canvas.drawImageRect(
                 background,
-                skia.Rect.MakeXYWH(ox, oy, rw, rh),
+                skia.Rect.MakeXYWH(ox, oy, bw * ratio, bh * ratio),
                 skia.SamplingOptions(skia.FilterMode.kLinear),
             )
         else:
