@@ -44,7 +44,10 @@
               </select>
             </div>
             <div class="form-group flex-1">
-              <label for="category-select">分类/角色 (Category)</label>
+              <div class="label-val-row">
+                <label for="category-select">分类/角色 (Category)</label>
+                <button type="button" id="btn-quick-cat-grid" class="text-btn" title="查看所有角色分类卡片">🖼️ 浏览角色</button>
+              </div>
               <select id="category-select" class="form-control" disabled>
                 <option value="">请先选择贴纸包</option>
               </select>
@@ -52,11 +55,18 @@
           </div>
 
           <div class="form-group">
-            <label for="sticker-select">具体贴纸 (Sticker)</label>
+            <div class="label-val-row">
+              <label for="sticker-select">具体贴纸 (Sticker)</label>
+              <button type="button" id="btn-quick-sticker-grid" class="text-btn" title="查看当前角色表情卡片">🖼️ 浏览表情</button>
+            </div>
             <select id="sticker-select" class="form-control" disabled>
               <option value="">请选择贴纸</option>
             </select>
           </div>
+
+          <button type="button" id="btn-open-gallery" class="btn btn-outline btn-sm" style="width: 100%; margin-bottom: 14px; border-color: var(--accent); color: var(--accent); font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>🎨</span> <b>交互式卡片选图 (点击角色包与表情)</b>
+          </button>
 
           <!-- Text Input -->
           <div class="form-group">
@@ -346,6 +356,52 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- Interactive Gallery Modal -->
+  <div id="gallery-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <h3 id="modal-title">🎨 表情包图库选择</h3>
+          <p id="modal-desc" class="modal-desc">在顶部可任意切换贴纸包；点击角色卡片查看表情包，点击具体表情即可载入工作台</p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="modal-btn-back" class="btn btn-secondary btn-sm hidden">⬅ 返回角色列表</button>
+          <button type="button" id="modal-btn-close" class="modal-close" title="关闭">&times;</button>
+        </div>
+      </div>
+
+      <!-- Search & Filter Bar with Pack Selector -->
+      <div class="modal-toolbar">
+        <div class="modal-toolbar-left">
+          <div class="modal-pack-wrap">
+            <span class="toolbar-label">🏷️ 贴纸包:</span>
+            <select id="modal-pack-select" class="form-control form-control-sm modal-select"></select>
+          </div>
+          <div class="modal-breadcrumb">
+            <span id="crumb-sep" class="crumb-sep hidden">➔</span>
+            <span id="crumb-cat" class="crumb-item hidden">角色</span>
+          </div>
+        </div>
+        <div class="modal-search-box">
+          <input type="text" id="modal-search-input" class="form-control form-control-sm" placeholder="🔍 快速过滤角色或表情名称..." />
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <!-- Cards List Area -->
+        <div class="gallery-cards-panel">
+          <div class="gallery-cards-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span id="gallery-cards-title" class="gallery-section-title">📋 快速选择卡片列表</span>
+            <span id="gallery-cards-count" class="badge">共 0 项</span>
+          </div>
+          <div id="gallery-cards-grid" class="cards-grid">
+            <!-- Cards rendered dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="./app.js"></script>

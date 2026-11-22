@@ -105,6 +105,9 @@ const elements = {
   packSelect: document.getElementById("pack-select"),
   categorySelect: document.getElementById("category-select"),
   stickerSelect: document.getElementById("sticker-select"),
+  btnQuickCatGrid: document.getElementById("btn-quick-cat-grid"),
+  btnQuickStickerGrid: document.getElementById("btn-quick-sticker-grid"),
+  btnOpenGallery: document.getElementById("btn-open-gallery"),
   textInput: document.getElementById("text-input"),
   fontSizeRange: document.getElementById("font-size-range"),
   fontSizeVal: document.getElementById("font-size-val"),
@@ -1230,10 +1233,254 @@ elements.btnMirrors.forEach((btn) => {
   });
 });
 
+// ==========================================
+// Interactive Gallery / Card Selector
+// ==========================================
+let currentGalleryMode = 'category'; // 'category' | 'sticker'
+let currentGalleryCat = null;
+
+function initGallery() {
+  const modal = document.getElementById('gallery-modal');
+  const btnClose = document.getElementById('modal-btn-close');
+  const btnBack = document.getElementById('modal-btn-back');
+  const searchInput = document.getElementById('modal-search-input');
+  const modalPackSelect = document.getElementById('modal-pack-select');
+
+  if (elements.btnOpenGallery) {
+    elements.btnOpenGallery.addEventListener('click', () => {
+      openGallery();
+    });
+  }
+  if (elements.btnQuickCatGrid) {
+    elements.btnQuickCatGrid.addEventListener('click', () => {
+      openGallery('category');
+    });
+  }
+  if (elements.btnQuickStickerGrid) {
+    elements.btnQuickStickerGrid.addEventListener('click', () => {
+      const cat = elements.categorySelect ? elements.categorySelect.value : null;
+      openGallery('sticker', cat);
+    });
+  }
+  if (btnClose) {
+    btnClose.addEventListener('click', closeGallery);
+  }
+  if (btnBack) {
+    btnBack.addEventListener('click', () => {
+      openGallery('category');
+    });
+  }
+  if (modalPackSelect) {
+    modalPackSelect.addEventListener('change', () => {
+      const newSlug = modalPackSelect.value;
+      if (elements.packSelect && elements.packSelect.value !== newSlug) {
+        elements.packSelect.value = newSlug;
+        onPackChange();
+      }
+      openGallery('category');
+    });
+  }
+
+  // Close when clicking outside modal-card
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeGallery();
+      }
+    });
+  }
+
+  // Keyboard navigation (Escape to close)
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+      closeGallery();
+    }
+  });
+
+  // Filter cards on search input
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.trim().toLowerCase();
+      const cards = document.querySelectorAll('#gallery-cards-grid .gallery-card');
+      let visibleCount = 0;
+      cards.forEach(card => {
+        const name = (card.dataset.name || '').toLowerCase();
+        if (!query || name.includes(query)) {
+          card.style.display = '';
+          visibleCount++;
+        } else {
+          card.style.display = 'none';
+        }
+      });
+      const countEl = document.getElementById('gallery-cards-count');
+      if (countEl) {
+        countEl.textContent = `显示 ${visibleCount} 项`;
+      }
+    });
+  }
+}
+
+function openGallery(mode, targetCategory) {
+  const modal = document.getElementById('gallery-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  const modalPackSelect = document.getElementById('modal-pack-select');
+  if (modalPackSelect && Object.keys(globalPacksTree).length > 0) {
+    modalPackSelect.innerHTML = '';
+    for (const [s, p] of Object.entries(globalPacksTree)) {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = p.name || s;
+      modalPackSelect.appendChild(opt);
+    }
+    modalPackSelect.value = elements.packSelect.value;
+  }
+
+  const slug = elements.packSelect.value;
+  const pack = globalPacksTree[slug];
+  if (!pack) return;
+
+  const searchInput = document.getElementById('modal-search-input');
+  if (searchInput) searchInput.value = '';
+
+  const disableCat = !!(pack.disable_category_select || pack.sticker_grid?.disable_category_select);
+
+  if (disableCat) {
+    renderGalleryView('sticker', null);
+  } else if (mode === 'sticker' && targetCategory) {
+    renderGalleryView('sticker', targetCategory);
+  } else {
+    renderGalleryView('category', null);
+  }
+}
+
+function closeGallery() {
+  const modal = document.getElementById('gallery-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function renderGalleryView(mode, selectedCategory) {
+  currentGalleryMode = mode;
+  currentGalleryCat = selectedCategory;
+
+  const slug = elements.packSelect.value;
+  const pack = globalPacksTree[slug];
+  if (!pack) return;
+
+  const modalPackSelect = document.getElementById('modal-pack-select');
+  if (modalPackSelect && modalPackSelect.value !== slug) {
+    modalPackSelect.value = slug;
+  }
+
+  const modalTitle = document.getElementById('modal-title');
+  const modalDesc = document.getElementById('modal-desc');
+  const btnBack = document.getElementById('modal-btn-back');
+  const crumbSep = document.getElementById('crumb-sep');
+  const crumbCat = document.getElementById('crumb-cat');
+  const cardsGrid = document.getElementById('gallery-cards-grid');
+  const cardsTitle = document.getElementById('gallery-cards-title');
+  const cardsCount = document.getElementById('gallery-cards-count');
+  const disableCat = !!(pack.disable_category_select || pack.sticker_grid?.disable_category_select);
+
+  if (cardsGrid) cardsGrid.innerHTML = '';
+
+  if (mode === 'category' && !disableCat) {
+    // Category Cards
+    if (modalTitle) modalTitle.textContent = `🎨 选择角色包 (Category) - ${pack.name || slug}`;
+    if (modalDesc) modalDesc.textContent = '点击角色卡片查看该角色下的具体表情包，也可在顶部切换贴纸包';
+    if (cardsTitle) cardsTitle.textContent = '📋 角色包列表';
+    if (btnBack) btnBack.classList.add('hidden');
+    if (crumbSep) crumbSep.classList.add('hidden');
+    if (crumbCat) crumbCat.classList.add('hidden');
+
+    const categories = Object.keys(pack.categories || {}).sort();
+    if (cardsCount) cardsCount.textContent = `共 ${categories.length} 个角色`;
+
+    categories.forEach((cat, idx) => {
+      const stickers = pack.categories[cat] || [];
+      const first = stickers[0];
+      const thumbUrl = first ? (first.cdn_url || (first.base_image ? `https://cdn.jsdelivr.net/gh/lgc-NB2Dev/meme-stickers-hub@main/${slug}/${first.base_image}` : '')) : '';
+      const fallbackUrl = first && first.base_image ? `https://ghfast.top/https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/${slug}/${first.base_image}` : '';
+      const card = document.createElement('div');
+      card.className = 'gallery-card';
+      card.dataset.name = cat.toLowerCase();
+      card.innerHTML = `
+        <img src="${thumbUrl}" class="gallery-card-thumb" loading="lazy" alt="${cat}" onerror="if('${fallbackUrl}') { this.onerror=null; this.src='${fallbackUrl}'; }" />
+        <div class="gallery-card-title">${idx + 1}. ${cat}</div>
+        <div class="gallery-card-badge">${stickers.length} 个表情 ➔</div>
+      `;
+      card.addEventListener('click', () => {
+        renderGalleryView('sticker', cat);
+      });
+      cardsGrid.appendChild(card);
+    });
+
+  } else {
+    // Sticker Cards
+    const targetCat = selectedCategory || Object.keys(pack.categories || {})[0];
+    let stickers = [];
+    if (disableCat) {
+      for (const catStickers of Object.values(pack.categories || {})) {
+        stickers.push(...catStickers);
+      }
+      if (modalTitle) modalTitle.textContent = `🎨 选择表情包 - ${pack.name || slug}`;
+      if (cardsTitle) cardsTitle.textContent = '📋 全部表情包列表';
+      if (btnBack) btnBack.classList.add('hidden');
+      if (crumbSep) crumbSep.classList.add('hidden');
+      if (crumbCat) crumbCat.classList.add('hidden');
+    } else {
+      stickers = pack.categories[targetCat] || [];
+      if (modalTitle) modalTitle.textContent = `🎨 选择具体表情包 - [${targetCat}]`;
+      if (cardsTitle) cardsTitle.textContent = `📋 角色【${targetCat}】的表情包`;
+      if (btnBack) btnBack.classList.remove('hidden');
+      if (crumbSep) crumbSep.classList.remove('hidden');
+      if (crumbCat) {
+        crumbCat.classList.remove('hidden');
+        crumbCat.textContent = targetCat;
+      }
+    }
+
+    if (modalDesc) modalDesc.textContent = '点击表情卡片即可直接载入工作台并进行文字编辑';
+    if (cardsCount) cardsCount.textContent = `共 ${stickers.length} 个表情`;
+
+    stickers.forEach((s, idx) => {
+      const thumbUrl = s.cdn_url || (s.base_image ? `https://cdn.jsdelivr.net/gh/lgc-NB2Dev/meme-stickers-hub@main/${slug}/${s.base_image}` : '');
+      const fallbackUrl = s.base_image ? `https://ghfast.top/https://raw.githubusercontent.com/lgc-NB2Dev/meme-stickers-hub/main/${slug}/${s.base_image}` : '';
+      const card = document.createElement('div');
+      card.className = 'gallery-card';
+      card.dataset.name = s.name.toLowerCase();
+      card.innerHTML = `
+        <img src="${thumbUrl}" class="gallery-card-thumb" loading="lazy" alt="${s.name}" onerror="if('${fallbackUrl}') { this.onerror=null; this.src='${fallbackUrl}'; }" />
+        <div class="gallery-card-title">${idx + 1}. ${s.name}</div>
+        <div class="gallery-card-badge">${s.text ? `"${s.text}"` : '默认配置'}</div>
+      `;
+      card.addEventListener('click', () => {
+        selectStickerFromGallery(slug, s.category || targetCat, s.name);
+      });
+      cardsGrid.appendChild(card);
+    });
+  }
+}
+
+function selectStickerFromGallery(packSlug, category, stickerName) {
+  elements.packSelect.value = packSlug;
+  if (category && elements.categorySelect) {
+    elements.categorySelect.value = category;
+    onCategoryChange();
+  }
+  if (elements.stickerSelect) {
+    elements.stickerSelect.value = stickerName;
+    onStickerChange();
+  }
+  closeGallery();
+}
+
 // Bootstrap
 async function bootstrap() {
   await client.init();
   initWebFont(); // Load font from CDN / CacheStorage asynchronously
+  initGallery();
   await loadStatus();
   await loadPacksDetail();
   await loadResourcesTable();
