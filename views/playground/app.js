@@ -296,11 +296,25 @@ function fillInnerCounters(ctx, w, h, strokeRgba) {
 // -------------------------------------------------------------
 const FONT_NAME = "YurukaFangTang";
 const FONT_CDN_SOURCES = [
+  "https://cdn.jsdelivr.net/gh/kyuphoenix/astrbot_plugin_meme_stickers_api@main/fonts/YurukaFangTang.ttf",
   "https://cdn.jsdelivr.net/gh/kyuphoenix/pjsk-stickers-server@main/fonts/YurukaFangTang.ttf",
-  "https://ghfast.top/https://raw.githubusercontent.com/kyuphoenix/pjsk-stickers-server/main/fonts/YurukaFangTang.ttf",
-  "https://cdn.jsdelivr.net/gh/lgc-NB2Dev/meme-stickers-hub@main/pjsk/YurukaFangTang.ttf",
+  "https://raw.githubusercontent.com/kyuphoenix/astrbot_plugin_meme_stickers_api/main/fonts/YurukaFangTang.ttf",
   "https://raw.githubusercontent.com/kyuphoenix/pjsk-stickers-server/main/fonts/YurukaFangTang.ttf",
 ];
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function initWebFont() {
   if (document.fonts && document.fonts.check(`16px "${FONT_NAME}"`)) {
@@ -331,8 +345,8 @@ async function initWebFont() {
     for (const url of FONT_CDN_SOURCES) {
       try {
         logToConsole(`[字体] 优先从 CDN 拉取字体: ${url.slice(0, 60)}...`);
-        const resp = await fetch(url, { mode: "cors" });
-        if (resp.ok) {
+        const resp = await fetchWithTimeout(url, { mode: "cors" }, 4500);
+        if (resp && resp.ok) {
           const buf = await resp.arrayBuffer();
           if (buf && buf.byteLength > 100000) {
             fontBuffer = buf;
